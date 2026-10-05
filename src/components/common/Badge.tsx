@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
-import { colors, borderRadius, typography } from '../../theme';
+import { borderRadius, typography } from '../../theme';
+import { useTheme } from '../../hooks/useTheme';
 
 interface BadgeProps {
   label: string;
@@ -9,6 +10,8 @@ interface BadgeProps {
 }
 
 export const Badge: React.FC<BadgeProps> = ({ label, variant = 'primary', style }) => {
+  const { colors } = useTheme();
+
   const getBadgeStyle = () => {
     switch (variant) {
       case 'success':

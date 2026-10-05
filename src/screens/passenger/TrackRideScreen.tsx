@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,20 +9,24 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { PassengerStackParamList } from '../../types';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, Colors } from '../../theme';
+import { useTheme } from '../../hooks/useTheme';
 import { Header } from '../../components/common/Header';
 import { Button } from '../../components/common/Button';
 import { MapViewContainer } from '../../components/map/MapViewContainer';
 import { RideStatusCard } from '../../components/ride/RideStatusCard';
 import { RatingModal } from '../../components/common/RatingModal';
-import { LoadingOverlay } from '../../components/common/LoadingOverlay';
+import { LoadingScreen } from '../../components/common/LoadingScreen';
 import { useRealtimeRide } from '../../hooks/useRealtimeRide';
 import { cancelRide, rateRide } from '../../api/rides';
 import { useRideStore } from '../../store/rideStore';
+import { getErrorMessage } from '../../utils/errors';
 
 type Props = NativeStackScreenProps<PassengerStackParamList, 'TrackRide'>;
 
 export const TrackRideScreen: React.FC<Props> = ({ route, navigation }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { rideId } = route.params;
   const { ride, loading } = useRealtimeRide(rideId);
   const setActiveRide = useRideStore((s) => s.setActiveRide);
@@ -51,9 +55,9 @@ export const TrackRideScreen: React.FC<Props> = ({ route, navigation }) => {
               setCancelling(true);
               await cancelRide(rideId, 'Cancelled by passenger', 'passenger');
               setActiveRide(null);
-              navigation.navigate('PassengerTabs');
-            } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to cancel booking');
+              navigation.navigate('PassengerHome');
+            } catch (err) {
+              Alert.alert('Error', getErrorMessage(err, 'Failed to cancel booking'));
             } finally {
               setCancelling(false);
             }
@@ -70,12 +74,12 @@ export const TrackRideScreen: React.FC<Props> = ({ route, navigation }) => {
       // ignore
     } finally {
       setShowRatingModal(false);
-      navigation.navigate('PassengerTabs');
+      navigation.navigate('PassengerHome');
     }
   };
 
   if (loading && !ride) {
-    return <LoadingOverlay visible message="Locating your ride..." />;
+    return <LoadingScreen message="Locating your ride..." />;
   }
 
   if (!ride) {
@@ -86,7 +90,7 @@ export const TrackRideScreen: React.FC<Props> = ({ route, navigation }) => {
           <Text style={styles.emptyText}>Ride details not found.</Text>
           <Button
             title="Back to Home"
-            onPress={() => navigation.navigate('PassengerTabs')}
+            onPress={() => navigation.navigate('PassengerHome')}
             style={styles.backHomeBtn}
           />
         </View>
@@ -158,7 +162,7 @@ export const TrackRideScreen: React.FC<Props> = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

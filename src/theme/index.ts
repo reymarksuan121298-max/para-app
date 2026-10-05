@@ -78,7 +78,15 @@ export const darkColors = {
   isDark: true,
 };
 
-export let colors = lightColors;
+/**
+ * Theme palette type.
+ *
+ * NOTE: do not export a frozen `colors` binding from this module — the palette
+ * changes at runtime (see `store/themeStore.ts`), so any style built from a
+ * module-level binding would be stuck with the light palette forever.
+ * Always read the palette via `useTheme()` and build styles from it.
+ */
+export type Colors = typeof lightColors;
 
 export const spacing = {
   xs: 4,
@@ -109,7 +117,6 @@ export const typography = {
 };
 
 export default {
-  colors,
   lightColors,
   darkColors,
   spacing,

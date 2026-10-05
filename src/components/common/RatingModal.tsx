@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Modal,
   View,
@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   TextInput,
 } from 'react-native';
-import { colors, borderRadius, typography, spacing } from '../../theme';
+import { borderRadius, typography, spacing, Colors } from '../../theme';
+import { useTheme } from '../../hooks/useTheme';
 import { Button } from './Button';
 
 interface RatingModalProps {
@@ -23,6 +24,8 @@ export const RatingModal: React.FC<RatingModalProps> = ({
   onSubmit,
   onClose,
 }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [rating, setRating] = useState<number>(5);
   const [comment, setComment] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -87,7 +90,7 @@ export const RatingModal: React.FC<RatingModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: colors.overlay,

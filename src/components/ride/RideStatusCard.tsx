@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, borderRadius, typography, spacing } from '../../theme';
+import { borderRadius, typography, spacing, Colors } from '../../theme';
+import { useTheme } from '../../hooks/useTheme';
 import { Ride } from '../../types';
 import { RIDE_STATUS_COLORS, RIDE_STATUS_LABELS } from '../../utils/constants';
 import { formatCurrency } from '../../utils/fareCalculator';
@@ -17,6 +18,8 @@ export const RideStatusCard: React.FC<RideStatusCardProps> = ({
   ride,
   showDriverDetails = true,
 }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const statusColor = RIDE_STATUS_COLORS[ride.status] || colors.primary;
   const statusLabel = RIDE_STATUS_LABELS[ride.status] || ride.status;
 
@@ -82,7 +85,7 @@ export const RideStatusCard: React.FC<RideStatusCardProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   card: {
     padding: spacing.md,
   },

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -7,12 +7,15 @@ import { AuthNavigator } from './AuthNavigator';
 import { PassengerNavigator } from './PassengerNavigator';
 import { DriverNavigator } from './DriverNavigator';
 import { AdminNavigator } from './AdminNavigator';
-import { colors } from '../theme';
+import { Colors } from '../theme';
+import { useTheme } from '../hooks/useTheme';
 import { RootStackParamList } from '../types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const RootNavigator: React.FC = () => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { isAuthenticated, role, isLoading } = useAuth();
 
   if (isLoading) {
@@ -40,7 +43,7 @@ export const RootNavigator: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   loadingContainer: {
     flex: 1,
     backgroundColor: colors.background,

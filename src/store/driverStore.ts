@@ -3,6 +3,7 @@ import { DriverStatus, Ride } from '../types';
 import { updateDriverAvailability, updateDriverLocation } from '../api/drivers';
 
 import { getCurrentCoordinates } from '../utils/location';
+import { getErrorMessage } from '../utils/errors';
 
 interface DriverState {
   status: DriverStatus;
@@ -35,7 +36,14 @@ export const useDriverStore = create<DriverState>((set, get) => ({
 
   setStatus: (status) => set({ status }),
   setLocation: (lat, lng) => set({ currentLat: lat, currentLng: lng }),
-  setIncomingRequest: (ride) => set({ incomingRequest: ride }),
+  setIncomingRequest: (ride) => {
+    const prev = get().incomingRequest;
+    // Ignore re-broadcasts of the request we are already showing: swapping in a
+    // new object with the same id only causes re-renders and re-arms the
+    // accept/decline countdown (see IncomingRequestModal).
+    if (prev && ride && prev.ride_id === ride.ride_id) return;
+    set({ incomingRequest: ride });
+  },
   setActiveTrip: (trip) => set({ activeTrip: trip }),
 
   toggleOnline: async (driverId: string) => {
@@ -56,8 +64,8 @@ export const useDriverStore = create<DriverState>((set, get) => ({
           })
           .catch(() => {});
       }
-    } catch (err: any) {
-      set({ isLoading: false, error: err.message });
+    } catch (err) {
+      set({ isLoading: false, error: getErrorMessage(err, 'Failed to update availability') });
     }
   },
 

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Modal } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, Colors } from '../../theme';
+import { useTheme } from '../../hooks/useTheme';
 
 interface LoadingOverlayProps {
   visible: boolean;
@@ -11,6 +12,8 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
   visible,
   message = 'Loading...',
 }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   if (!visible) return null;
 
   return (
@@ -25,7 +28,7 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: colors.overlay,

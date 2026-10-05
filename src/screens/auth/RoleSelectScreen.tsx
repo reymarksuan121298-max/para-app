@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,15 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../types';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, Colors } from '../../theme';
+import { useTheme } from '../../hooks/useTheme';
 import { Header } from '../../components/common/Header';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'RoleSelect'>;
 
 export const RoleSelectScreen: React.FC<Props> = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <SafeAreaView style={styles.safeArea}>
       <Header title="Join PARA" onBack={() => navigation.goBack()} />
@@ -64,7 +67,7 @@ export const RoleSelectScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

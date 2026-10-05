@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useRef, useState } from 'react';
 import { Modal, View, Text, StyleSheet, Vibration } from 'react-native';
-import { colors, borderRadius, typography, spacing } from '../../theme';
+import { borderRadius, typography, spacing, Colors } from '../../theme';
+import { useTheme } from '../../hooks/useTheme';
 import { Ride } from '../../types';
 import { formatCurrency } from '../../utils/fareCalculator';
 import { formatSecondsToMinutes } from '../../utils/formatters';
@@ -14,46 +15,72 @@ interface IncomingRequestModalProps {
   onDecline: (ride: Ride) => void;
 }
 
+/** Seconds a driver has to accept/decline before the request auto-declines. */
+const REQUEST_TIMEOUT_SECONDS = 300;
+
 export const IncomingRequestModal: React.FC<IncomingRequestModalProps> = ({
   visible,
   ride,
   onAccept,
   onDecline,
 }) => {
-  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes default
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const [timeLeft, setTimeLeft] = useState(REQUEST_TIMEOUT_SECONDS);
   const [accepting, setAccepting] = useState(false);
 
-  useEffect(() => {
-    if (visible && ride) {
-      setTimeLeft(300);
+  // Keep the latest callback/ride reachable without putting them in the effect
+  // deps: the parent re-creates the `ride` object on every realtime/polling
+  // tick, and depending on it re-armed the countdown (stuck at 5:00), restarted
+  // the vibration pattern and postponed auto-decline forever.
+  const rideRef = useRef(ride);
+  rideRef.current = ride;
+  const onDeclineRef = useRef(onDecline);
+  onDeclineRef.current = onDecline;
 
-      // Native haptic feedback matching the 2-second alert interval: [100ms vibrate, 50ms pause, 250ms vibrate]
+  // The countdown belongs to one ride request only.
+  const rideId = ride?.ride_id ?? null;
+  const remainingRef = useRef(REQUEST_TIMEOUT_SECONDS);
+
+  useEffect(() => {
+    if (!visible || !rideId) return;
+
+    remainingRef.current = REQUEST_TIMEOUT_SECONDS;
+    setTimeLeft(REQUEST_TIMEOUT_SECONDS);
+
+    // Native haptic feedback matching the 2-second alert interval: [100ms vibrate, 50ms pause, 250ms vibrate]
+    try {
+      // [wait 0ms, vibrate 100ms, wait 50ms, vibrate 250ms, wait 1600ms]
+      Vibration.vibrate([0, 100, 50, 250, 1600], true);
+    } catch {
+      // ignore
+    }
+
+    const timer = setInterval(() => {
+      remainingRef.current -= 1;
+      const remaining = remainingRef.current;
+      setTimeLeft(Math.max(0, remaining));
+
+      if (remaining <= 0) {
+        clearInterval(timer);
+        // Side effect stays outside the state updater so StrictMode cannot
+        // invoke it twice.
+        const currentRide = rideRef.current;
+        if (currentRide) {
+          onDeclineRef.current(currentRide);
+        }
+      }
+    }, 1000);
+
+    return () => {
+      clearInterval(timer);
       try {
-        // [wait 0ms, vibrate 100ms, wait 50ms, vibrate 250ms, wait 1600ms]
-        Vibration.vibrate([0, 100, 50, 250, 1600], true);
+        Vibration.cancel();
       } catch {
         // ignore
       }
-
-      const timer = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            onDecline(ride);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-      return () => {
-        clearInterval(timer);
-        try {
-          Vibration.cancel();
-        } catch {}
-      };
-    }
-  }, [visible, ride, onDecline]);
+    };
+  }, [visible, rideId]);
 
   if (!visible || !ride) return null;
 
@@ -124,7 +151,7 @@ export const IncomingRequestModal: React.FC<IncomingRequestModalProps> = ({
             />
             <Button
               title="ACCEPT RIDE"
-              variant="primary"
+              variant="success"
               onPress={handleAccept}
               loading={accepting}
               style={styles.acceptBtn}
@@ -136,7 +163,7 @@ export const IncomingRequestModal: React.FC<IncomingRequestModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: colors.overlay,
@@ -251,6 +278,5 @@ const styles = StyleSheet.create({
   },
   acceptBtn: {
     flex: 2,
-    backgroundColor: colors.success,
   },
 });

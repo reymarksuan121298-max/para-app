@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,80 +9,81 @@ import {
   Platform,
   TouchableOpacity,
 } from 'react-native';
+import { useForm, useWatch } from 'react-hook-form';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../types';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, Colors } from '../../theme';
+import { useTheme } from '../../hooks/useTheme';
 import { Header } from '../../components/common/Header';
-import { Input } from '../../components/common/Input';
+import { FormInput } from '../../components/common/FormInput';
 import { Button } from '../../components/common/Button';
 import { ErrorBanner } from '../../components/common/ErrorBanner';
 import { signUpDriver, signUpPassenger } from '../../api/auth';
 import { useAuthStore } from '../../store/authStore';
+import { registerResolver, RegisterFormData } from '../../utils/validators';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
 export const RegisterScreen: React.FC<Props> = ({ route, navigation }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const defaultRole = route.params?.defaultRole || 'passenger';
   const [role, setRole] = useState<'passenger' | 'driver'>(defaultRole);
 
-  // Common fields
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-
-  // Driver-specific fields
-  const [licenseNumber, setLicenseNumber] = useState('');
-  const [vehicleNumber, setVehicleNumber] = useState('');
-  const [seatCapacity, setSeatCapacity] = useState<number>(6);
+  // The driver schema adds license / vehicle / seat capacity validation, so the
+  // resolver is rebuilt whenever the selected role changes.
+  const { control, handleSubmit, setValue } = useForm<RegisterFormData>({
+    resolver: registerResolver(role),
+    defaultValues: {
+      name: '',
+      email: '',
+      phone: '',
+      password: '',
+      license_number: '',
+      vehicle_number: '',
+      seat_capacity: 6,
+    },
+    mode: 'onBlur',
+  });
+  const seatCapacity = useWatch({ control, name: 'seat_capacity' });
 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Server-side failures (duplicate email, network) live outside field validation.
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const initializeAuth = useAuthStore((s) => s.initializeAuth);
 
-  const handleRegister = async () => {
-    if (!name.trim() || !email.trim() || !phone.trim() || !password.trim()) {
-      setError('Please fill in all personal information fields');
-      return;
-    }
-
+  const handleRegister = handleSubmit(async (values) => {
     try {
       setLoading(true);
-      setError(null);
+      setSubmitError(null);
 
       if (role === 'passenger') {
         await signUpPassenger({
-          name: name.trim(),
-          email: email.trim(),
-          phone: phone.trim(),
-          password,
+          name: values.name.trim(),
+          email: values.email.trim(),
+          phone: values.phone.trim(),
+          password: values.password,
         });
       } else {
-        if (!licenseNumber.trim() || !vehicleNumber.trim()) {
-          setError('Please provide your driver license and vehicle details');
-          setLoading(false);
-          return;
-        }
-
         await signUpDriver({
-          name: name.trim(),
-          email: email.trim(),
-          phone: phone.trim(),
-          password,
-          license_number: licenseNumber.trim(),
-          vehicle_number: vehicleNumber.trim(),
-          seat_capacity: seatCapacity,
+          name: values.name.trim(),
+          email: values.email.trim(),
+          phone: values.phone.trim(),
+          password: values.password,
+          license_number: (values.license_number ?? '').trim(),
+          vehicle_number: (values.vehicle_number ?? '').trim(),
+          seat_capacity: values.seat_capacity ?? 6,
         });
       }
 
       await initializeAuth();
-    } catch (err: any) {
-      setError(err.message || 'Registration failed');
+    } catch (err) {
+      setSubmitError(err instanceof Error && err.message ? err.message : 'Registration failed');
     } finally {
       setLoading(false);
     }
-  };
+  });
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -124,37 +125,37 @@ export const RegisterScreen: React.FC<Props> = ({ route, navigation }) => {
             </TouchableOpacity>
           </View>
 
-          <ErrorBanner message={error} />
+          <ErrorBanner message={submitError} />
 
           {/* Personal Info */}
           <Text style={styles.sectionTitle}>Personal Details</Text>
-          <Input
+          <FormInput
+            control={control}
+            name="name"
             label="Full Name"
             placeholder="e.g. Maria Santos"
-            value={name}
-            onChangeText={setName}
           />
-          <Input
+          <FormInput
+            control={control}
+            name="email"
             label="Email Address"
             placeholder="e.g. maria@example.com"
             keyboardType="email-address"
             autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
           />
-          <Input
+          <FormInput
+            control={control}
+            name="phone"
             label="Mobile Phone Number"
             placeholder="e.g. 09171234567"
             keyboardType="phone-pad"
-            value={phone}
-            onChangeText={setPhone}
           />
-          <Input
+          <FormInput
+            control={control}
+            name="password"
             label="Password"
             placeholder="Minimum 6 characters"
             secureTextEntry
-            value={password}
-            onChangeText={setPassword}
           />
 
           {/* Driver specific info */}
@@ -162,20 +163,20 @@ export const RegisterScreen: React.FC<Props> = ({ route, navigation }) => {
             <View style={styles.driverSection}>
               <Text style={styles.sectionTitle}>Tricycle & License Details</Text>
 
-              <Input
+              <FormInput
+                control={control}
+                name="license_number"
                 label="Driver's License Number"
                 placeholder="e.g. N01-12-345678"
                 autoCapitalize="characters"
-                value={licenseNumber}
-                onChangeText={setLicenseNumber}
               />
 
-              <Input
+              <FormInput
+                control={control}
+                name="vehicle_number"
                 label="Tricycle Body / Plate Number"
                 placeholder="e.g. MKL-1234"
                 autoCapitalize="characters"
-                value={vehicleNumber}
-                onChangeText={setVehicleNumber}
               />
 
               <Text style={styles.capacityLabel}>Seat Capacity (5 to 7 passengers)</Text>
@@ -187,7 +188,7 @@ export const RegisterScreen: React.FC<Props> = ({ route, navigation }) => {
                       styles.capBtn,
                       seatCapacity === cap && styles.capBtnActive,
                     ]}
-                    onPress={() => setSeatCapacity(cap)}
+                    onPress={() => setValue('seat_capacity', cap)}
                   >
                     <Text
                       style={[
@@ -215,7 +216,7 @@ export const RegisterScreen: React.FC<Props> = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

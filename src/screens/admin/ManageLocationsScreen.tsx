@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,11 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { useForm } from 'react-hook-form';
+import { typography, spacing, borderRadius, Colors } from '../../theme';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
-import { Input } from '../../components/common/Input';
+import { FormInput } from '../../components/common/FormInput';
 import { Button } from '../../components/common/Button';
 import {
   getAllLocations,
@@ -27,6 +28,12 @@ import { SidebarDrawer } from '../../components/common/SidebarDrawer';
 import { useTheme } from '../../hooks/useTheme';
 import { supabase } from '../../api/supabaseClient';
 import { getCurrentCoordinates, reverseGeocode } from '../../utils/location';
+import {
+  locationSchema,
+  zodResolver,
+  LocationFormValues,
+  LocationFormData,
+} from '../../utils/validators';
 
 export const ManageLocationsScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'reference' | 'live_passenger'>('reference');
@@ -37,12 +44,19 @@ export const ManageLocationsScreen: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [gettingGps, setGettingGps] = useState(false);
   const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  // Form state for new location
-  const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
-  const [lat, setLat] = useState('');
-  const [lng, setLng] = useState('');
+  // Form state for new location (coordinates arrive as text from the keyboard
+  // and are converted to numbers by the resolver on submit).
+  const { control, handleSubmit, reset, setValue, getValues } = useForm<
+    LocationFormValues,
+    unknown,
+    LocationFormData
+  >({
+    resolver: zodResolver(locationSchema),
+    defaultValues: { name: '', address: '', latitude: '', longitude: '' },
+    mode: 'onBlur',
+  });
   const [isPopular, setIsPopular] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -94,11 +108,15 @@ export const ManageLocationsScreen: React.FC = () => {
       setGettingGps(true);
       const coords = await getCurrentCoordinates();
       if (coords) {
-        setLat(coords.latitude.toFixed(6));
-        setLng(coords.longitude.toFixed(6));
+        setValue('latitude', coords.latitude.toFixed(6));
+        setValue('longitude', coords.longitude.toFixed(6));
         const geo = await reverseGeocode(coords.latitude, coords.longitude);
-        if (geo.name && !name) setName(geo.name);
-        if (geo.fullAddress) setAddress(geo.fullAddress);
+        if (geo.name && !getValues('name')) {
+          setValue('name', geo.name);
+        }
+        if (geo.fullAddress) {
+          setValue('address', geo.fullAddress);
+        }
       } else {
         Alert.alert('GPS Unavailable', 'Could not obtain device GPS coordinates.');
       }
@@ -107,34 +125,31 @@ export const ManageLocationsScreen: React.FC = () => {
     }
   };
 
-  const handleAddLocation = async () => {
-    if (!name.trim() || !address.trim() || !lat || !lng) {
-      Alert.alert('Incomplete Fields', 'Please fill in all location details.');
-      return;
-    }
-
+  const handleAddLocation = handleSubmit(async (values) => {
     try {
       setSubmitting(true);
+      // `values` is the parsed payload: names/addresses are trimmed and the
+      // coordinates are validated numbers (never `NaN`).
       await createLocation({
-        name: name.trim(),
-        address: address.trim(),
-        latitude: parseFloat(lat),
-        longitude: parseFloat(lng),
+        name: values.name,
+        address: values.address,
+        latitude: values.latitude,
+        longitude: values.longitude,
         is_popular: isPopular,
       });
 
       setShowAddModal(false);
-      setName('');
-      setAddress('');
-      setLat('');
-      setLng('');
+      reset();
       await fetchAllData();
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to create location');
+    } catch (err) {
+      Alert.alert(
+        'Error',
+        err instanceof Error && err.message ? err.message : 'Failed to create location',
+      );
     } finally {
       setSubmitting(false);
     }
-  };
+  });
 
   const handleDeleteLocation = (loc: LocationItem) => {
     Alert.alert('Delete Location', `Are you sure you want to delete ${loc.name || loc.address}?`, [
@@ -146,9 +161,14 @@ export const ManageLocationsScreen: React.FC = () => {
           setLocations((prev) => prev.filter((l) => l.location_id !== loc.location_id));
           try {
             await deleteLocation(loc.location_id);
-          } catch (err: any) {
+          } catch (err) {
             await fetchAllData();
-            Alert.alert('Error', err.message || 'Failed to delete location from server.');
+            Alert.alert(
+              'Error',
+              err instanceof Error && err.message
+                ? err.message
+                : 'Failed to delete location from server.',
+            );
           }
         },
       },
@@ -303,35 +323,35 @@ export const ManageLocationsScreen: React.FC = () => {
               )}
             </TouchableOpacity>
 
-            <Input
+            <FormInput
+              control={control}
+              name="name"
               label="Landmark / Station Name"
               placeholder="e.g. Central Terminal Hub"
-              value={name}
-              onChangeText={setName}
             />
 
-            <Input
+            <FormInput
+              control={control}
+              name="address"
               label="Full Address / Area"
               placeholder="e.g. Barangay Poblacion, Main Highway"
-              value={address}
-              onChangeText={setAddress}
             />
 
             <View style={styles.coordsRow}>
-              <Input
+              <FormInput
+                control={control}
+                name="latitude"
                 label="Latitude"
                 placeholder="6.9604"
                 keyboardType="decimal-pad"
-                value={lat}
-                onChangeText={setLat}
                 containerStyle={styles.coordInput}
               />
-              <Input
+              <FormInput
+                control={control}
+                name="longitude"
                 label="Longitude"
                 placeholder="125.0886"
                 keyboardType="decimal-pad"
-                value={lng}
-                onChangeText={setLng}
                 containerStyle={styles.coordInput}
               />
             </View>
@@ -357,7 +377,7 @@ export const ManageLocationsScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

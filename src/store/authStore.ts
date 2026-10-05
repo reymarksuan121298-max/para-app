@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { DriverProfile, PassengerProfile, UserProfile, UserRole } from '../types';
 import { getCurrentUserProfile, getStoredSessionUserId, signOut as apiSignOut } from '../api/auth';
 import { supabase } from '../api/supabaseClient';
+import { getErrorMessage } from '../utils/errors';
 
 interface AuthState {
   user: UserProfile | null;
@@ -53,14 +54,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           isLoading: false,
         });
       }
-    } catch (err: any) {
+    } catch (err) {
       set({
         user: null,
         passenger: null,
         driver: null,
         isAuthenticated: false,
         isLoading: false,
-        error: err.message || 'Auth initialization failed',
+        error: getErrorMessage(err, 'Auth initialization failed'),
       });
     }
   },
@@ -87,8 +88,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isAuthenticated: false,
         isLoading: false,
       });
-    } catch (err: any) {
-      set({ isLoading: false, error: err.message });
+    } catch (err) {
+      set({ isLoading: false, error: getErrorMessage(err, 'Failed to sign out') });
     }
   },
 }));

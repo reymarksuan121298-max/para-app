@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, Colors } from '../../theme';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
 import { Badge } from '../../components/common/Badge';
@@ -16,6 +16,7 @@ import { Input } from '../../components/common/Input';
 import { getAllUsers, updateUserStatus } from '../../api/admin';
 import { UserProfile, UserRole } from '../../types';
 import { formatDate } from '../../utils/formatters';
+import { getErrorMessage } from '../../utils/errors';
 
 import { SidebarDrawer } from '../../components/common/SidebarDrawer';
 import { useTheme } from '../../hooks/useTheme';
@@ -27,6 +28,7 @@ export const ManageUsersScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const fetchUsers = async () => {
     try {
@@ -58,8 +60,8 @@ export const ManageUsersScreen: React.FC = () => {
             try {
               await updateUserStatus(user.user_id, nextStatus);
               await fetchUsers();
-            } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to update user status');
+            } catch (err) {
+              Alert.alert('Error', getErrorMessage(err, 'Failed to update user status'));
             }
           },
         },
@@ -177,7 +179,7 @@ export const ManageUsersScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

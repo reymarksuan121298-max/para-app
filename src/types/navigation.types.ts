@@ -15,7 +15,6 @@ export type PassengerTabParamList = {
 };
 
 export type PassengerStackParamList = {
-  PassengerTabs?: undefined;
   PassengerHome: undefined;
   RideHistory: undefined;
   PassengerProfile: undefined;

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, typography, spacing } from '../../theme';
+import { typography, spacing, Colors } from '../../theme';
+import { useTheme } from '../../hooks/useTheme';
 import { FareEstimateResult } from '../../types';
 import { formatCurrency } from '../../utils/fareCalculator';
 import { Card } from '../common/Card';
@@ -10,6 +11,8 @@ interface FareBreakdownCardProps {
 }
 
 export const FareBreakdownCard: React.FC<FareBreakdownCardProps> = ({ estimate }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <Card style={styles.card}>
       <Text style={styles.title}>Fare Breakdown</Text>
@@ -53,7 +56,7 @@ export const FareBreakdownCard: React.FC<FareBreakdownCardProps> = ({ estimate }
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   card: {
     padding: spacing.md,
   },

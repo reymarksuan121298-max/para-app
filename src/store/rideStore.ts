@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { FareEstimateResult, LocationItem, Ride } from '../types';
 import { getRideDetails, getPassengerRideHistory } from '../api/rides';
+import { getErrorMessage } from '../utils/errors';
 
 interface RideState {
   activeRide: Ride | null;
@@ -43,8 +44,8 @@ export const useRideStore = create<RideState>((set) => ({
       set({ isLoading: true, error: null });
       const ride = await getRideDetails(rideId);
       set({ activeRide: ride, isLoading: false });
-    } catch (err: any) {
-      set({ isLoading: false, error: err.message });
+    } catch (err) {
+      set({ isLoading: false, error: getErrorMessage(err, 'Failed to load the active ride') });
     }
   },
 
@@ -53,8 +54,8 @@ export const useRideStore = create<RideState>((set) => ({
       set({ isLoading: true, error: null });
       const history = await getPassengerRideHistory(passengerId);
       set({ rideHistory: history, isLoading: false });
-    } catch (err: any) {
-      set({ isLoading: false, error: err.message });
+    } catch (err) {
+      set({ isLoading: false, error: getErrorMessage(err, 'Failed to load ride history') });
     }
   },
 

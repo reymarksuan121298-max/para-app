@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,31 +7,52 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { useForm } from 'react-hook-form';
+import { typography, spacing, borderRadius, Colors } from '../../theme';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
-import { Input } from '../../components/common/Input';
+import { FormInput } from '../../components/common/FormInput';
 import { Button } from '../../components/common/Button';
 import { ErrorBanner } from '../../components/common/ErrorBanner';
 import { getFareSettings, updateFareSettings } from '../../api/admin';
 import { FareSettings } from '../../types';
 import { SidebarDrawer } from '../../components/common/SidebarDrawer';
 import { useTheme } from '../../hooks/useTheme';
+import {
+  fareSettingsSchema,
+  zodResolver,
+  FareSettingsFormValues,
+  FareSettingsFormData,
+} from '../../utils/validators';
 
 export const ManageFaresScreen: React.FC = () => {
   const [settings, setSettings] = useState<FareSettings | null>(null);
-  const [baseFare, setBaseFare] = useState('');
-  const [baseDistance, setBaseDistance] = useState('');
-  const [ratePerKm, setRatePerKm] = useState('');
-  const [extraPassengerRate, setExtraPassengerRate] = useState('');
-  const [matchRadius, setMatchRadius] = useState('');
-  const [timeoutSeconds, setTimeoutSeconds] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Server-side failures (network, permissions) live outside field validation.
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  // Inputs hold text while editing; the resolver converts them to numbers.
+  const { control, handleSubmit, reset } = useForm<
+    FareSettingsFormValues,
+    unknown,
+    FareSettingsFormData
+  >({
+    resolver: zodResolver(fareSettingsSchema),
+    defaultValues: {
+      base_fare: '',
+      base_distance_km: '',
+      rate_per_km: '',
+      rate_per_extra_passenger: '',
+      match_radius_km: '',
+      request_timeout_seconds: '',
+    },
+    mode: 'onBlur',
+  });
 
   useEffect(() => {
     loadSettings();
@@ -43,42 +64,43 @@ export const ManageFaresScreen: React.FC = () => {
       const data = await getFareSettings();
       if (data) {
         setSettings(data);
-        setBaseFare(String(data.base_fare));
-        setBaseDistance(String(data.base_distance_km));
-        setRatePerKm(String(data.rate_per_km));
-        setExtraPassengerRate(String(data.rate_per_extra_passenger));
-        setMatchRadius(String(data.match_radius_km));
-        setTimeoutSeconds(String(data.request_timeout_seconds));
+        reset({
+          base_fare: String(data.base_fare),
+          base_distance_km: String(data.base_distance_km),
+          rate_per_km: String(data.rate_per_km),
+          rate_per_extra_passenger: String(data.rate_per_extra_passenger),
+          match_radius_km: String(data.match_radius_km),
+          request_timeout_seconds: String(data.request_timeout_seconds),
+        });
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load fare settings');
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error && err.message ? err.message : 'Failed to load fare settings',
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = handleSubmit(async (values) => {
     try {
       setSaving(true);
-      setError(null);
+      setSubmitError(null);
 
-      await updateFareSettings({
-        base_fare: parseFloat(baseFare),
-        base_distance_km: parseFloat(baseDistance),
-        rate_per_km: parseFloat(ratePerKm),
-        rate_per_extra_passenger: parseFloat(extraPassengerRate),
-        match_radius_km: parseFloat(matchRadius),
-        request_timeout_seconds: parseInt(timeoutSeconds, 10),
-      });
+      // `values` is the parsed payload: every field is a validated number, so
+      // no `parseFloat`/`NaN` can reach the API.
+      await updateFareSettings(values);
 
       Alert.alert('Success', 'Fare configuration successfully updated across the system!');
       await loadSettings();
-    } catch (err: any) {
-      setError(err.message || 'Failed to update fare settings');
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error && err.message ? err.message : 'Failed to update fare settings',
+      );
     } finally {
       setSaving(false);
     }
-  };
+  });
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
@@ -93,7 +115,7 @@ export const ManageFaresScreen: React.FC = () => {
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <ErrorBanner message={error} />
+        <ErrorBanner message={submitError} />
 
         <Card style={styles.card}>
           <Text style={styles.sectionTitle}>Tricycle Fare Structure (Makilala)</Text>
@@ -102,39 +124,39 @@ export const ManageFaresScreen: React.FC = () => {
             passenger bookings.
           </Text>
 
-          <Input
+          <FormInput
+            control={control}
+            name="base_fare"
             label="Base Fare (PHP ₱)"
             placeholder="15.00"
             keyboardType="decimal-pad"
-            value={baseFare}
-            onChangeText={setBaseFare}
             helperText="Minimum fare for the initial base distance"
           />
 
-          <Input
+          <FormInput
+            control={control}
+            name="base_distance_km"
             label="Base Distance Threshold (Kilometers)"
             placeholder="2.0"
             keyboardType="decimal-pad"
-            value={baseDistance}
-            onChangeText={setBaseDistance}
             helperText="Distance covered by the initial base fare"
           />
 
-          <Input
+          <FormInput
+            control={control}
+            name="rate_per_km"
             label="Rate Per Extra Kilometer (PHP ₱)"
             placeholder="8.00"
             keyboardType="decimal-pad"
-            value={ratePerKm}
-            onChangeText={setRatePerKm}
             helperText="Additional charge per km beyond base distance"
           />
 
-          <Input
+          <FormInput
+            control={control}
+            name="rate_per_extra_passenger"
             label="Rate Per Extra Passenger (PHP ₱)"
             placeholder="5.00"
             keyboardType="decimal-pad"
-            value={extraPassengerRate}
-            onChangeText={setExtraPassengerRate}
             helperText="Surcharge per additional passenger (passenger 2 to 7)"
           />
         </Card>
@@ -142,21 +164,21 @@ export const ManageFaresScreen: React.FC = () => {
         <Card style={styles.card}>
           <Text style={styles.sectionTitle}>Dispatch & Timeout Parameters</Text>
 
-          <Input
+          <FormInput
+            control={control}
+            name="match_radius_km"
             label="Driver Matching Radius (Kilometers)"
             placeholder="3.5"
             keyboardType="decimal-pad"
-            value={matchRadius}
-            onChangeText={setMatchRadius}
             helperText="Maximum distance to alert nearby available tricycles"
           />
 
-          <Input
+          <FormInput
+            control={control}
+            name="request_timeout_seconds"
             label="Ride Request Timeout (Seconds)"
             placeholder="300"
             keyboardType="number-pad"
-            value={timeoutSeconds}
-            onChangeText={setTimeoutSeconds}
             helperText="Auto-cancel pending ride if unclaimed (default: 300s / 5 mins)"
           />
         </Card>
@@ -165,6 +187,7 @@ export const ManageFaresScreen: React.FC = () => {
           title="Save Fare Settings"
           onPress={handleSave}
           loading={saving}
+          disabled={loading}
           size="lg"
           style={styles.saveBtn}
         />
@@ -173,7 +196,7 @@ export const ManageFaresScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

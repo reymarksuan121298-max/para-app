@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuthStore } from '../../store/authStore';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius } from '../../theme';
 import { formatCurrency } from '../../utils/fareCalculator';
 
 interface SidebarDrawerProps {
@@ -38,21 +38,39 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({ visible, onClose }
   const isDriver = user?.role === 'driver';
   const isOnline = driverStatus === 'online';
 
+  // Keep the drawer mounted while it animates out. React Native removes modal
+  // content the moment `visible` becomes false, so animating against `visible`
+  // directly made the drawer pop away instead of sliding out.
+  const [rendered, setRendered] = useState(visible);
+
   useEffect(() => {
+    if (visible) {
+      setRendered(true);
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (!rendered) return;
+
     if (visible) {
       Animated.timing(slideAnim, {
         toValue: 0,
         duration: 250,
         useNativeDriver: true,
       }).start();
-    } else {
-      Animated.timing(slideAnim, {
-        toValue: -SIDEBAR_WIDTH,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
+      return;
     }
-  }, [visible]);
+
+    Animated.timing(slideAnim, {
+      toValue: -SIDEBAR_WIDTH,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        setRendered(false);
+      }
+    });
+  }, [rendered, visible, slideAnim]);
 
   const handleNavigate = (screenName: string) => {
     onClose();
@@ -74,7 +92,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({ visible, onClose }
   const avatarCircleBg = isDarkMode ? '#1E293B' : '#F0F9FF';
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={rendered} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <TouchableWithoutFeedback onPress={onClose}>
           <View style={styles.backdrop} />
@@ -107,7 +125,9 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({ visible, onClose }
 
             {/* Driver Online / Offline Quick Toggle */}
             {isDriver && driver?.driver_id && (
-              <TouchableOpacity
+              // One handler per touch target — see DriverDashboard header: the
+              // Switch must not sit inside another pressable that toggles too.
+              <View
                 style={[
                   styles.driverStatusToggleBadge,
                   {
@@ -115,15 +135,18 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({ visible, onClose }
                     borderColor: isOnline ? (isDarkMode ? '#059669' : '#86EFAC') : (isDarkMode ? '#334155' : '#CBD5E1'),
                   },
                 ]}
-                onPress={() => toggleOnline(driver.driver_id)}
-                activeOpacity={0.85}
               >
-                <View style={styles.driverStatusLeft}>
+                <TouchableOpacity
+                  style={styles.driverStatusLeft}
+                  onPress={() => toggleOnline(driver.driver_id)}
+                  activeOpacity={0.85}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
                   <View style={[styles.driverStatusDot, { backgroundColor: isOnline ? '#22C55E' : '#94A3B8' }]} />
                   <Text style={[styles.driverStatusText, { color: isOnline ? (isDarkMode ? '#A7F3D0' : '#15803D') : sidebarSubtext }]}>
                     {isOnline ? 'ONLINE & READY' : 'OFFLINE'}
                   </Text>
-                </View>
+                </TouchableOpacity>
                 <Switch
                   value={isOnline}
                   onValueChange={() => toggleOnline(driver.driver_id)}
@@ -131,7 +154,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({ visible, onClose }
                   thumbColor={isOnline ? '#15803D' : '#94A3B8'}
                   style={styles.driverSwitch}
                 />
-              </TouchableOpacity>
+              </View>
             )}
           </View>
 

@@ -110,6 +110,10 @@ const SOUND_HTML = `
 export const DispatchSoundNotifier: React.FC<DispatchSoundNotifierProps> = ({ play }) => {
   const webViewRef = useRef<any>(null);
 
+  // Track the latest intent so it can be replayed once the page has loaded.
+  const playRef = useRef(play);
+  playRef.current = play;
+
   useEffect(() => {
     if (webViewRef.current) {
       try {
@@ -125,6 +129,14 @@ export const DispatchSoundNotifier: React.FC<DispatchSoundNotifierProps> = ({ pl
     };
   }, [play]);
 
+  // Messages sent before the WebView finished loading are lost, which left the
+  // dispatch alert silent for requests that opened during startup.
+  const handleLoad = () => {
+    try {
+      webViewRef.current?.postMessage(playRef.current ? 'start' : 'stop');
+    } catch {}
+  };
+
   const WebViewComponent: any = WebView;
 
   return (
@@ -135,6 +147,7 @@ export const DispatchSoundNotifier: React.FC<DispatchSoundNotifierProps> = ({ pl
         javaScriptEnabled={true}
         domStorageEnabled={true}
         originWhitelist={['*']}
+        onLoad={handleLoad}
         allowsInlineMediaPlayback={true}
         mediaPlaybackRequiresUserAction={false}
         style={styles.hiddenWebview}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Ride } from '../types';
 import { getRideDetails, subscribeToRideChanges } from '../api/rides';
 import { useRideStore } from '../store/rideStore';
+import { getErrorMessage } from '../utils/errors';
 
 export function useRealtimeRide(rideId?: string | null) {
   const [ride, setRide] = useState<Ride | null>(null);
@@ -27,9 +28,9 @@ export function useRealtimeRide(rideId?: string | null) {
           setActiveRide(data);
           setLoading(false);
         }
-      } catch (err: any) {
+      } catch (err) {
         if (isMounted) {
-          setError(err.message);
+          setError(getErrorMessage(err, 'Failed to load ride details'));
           setLoading(false);
         }
       }

@@ -67,23 +67,47 @@ export const MapViewContainer = forwardRef<MapViewRef, MapViewContainerProps>(
       },
     }));
 
-    // Update markers and route dynamically
-    useEffect(() => {
-      const updateData = {
-        pickup: pickupCoord,
-        dropoff: dropoffCoord,
-        driver: driverCoord,
-        nearby: nearbyDrivers.map((d) => ({
-          id: d.driver_id,
-          name: d.driver_name,
-          vehicle: d.vehicle_number,
-          lat: d.current_lat,
-          lng: d.current_lng,
-        })),
-      };
-      const js = `if (window.updateMapData) { window.updateMapData(${JSON.stringify(updateData)}); }`;
+    // Serialise the payload so freshly-built coordinate objects coming from
+    // parent re-renders don't trigger a JS round-trip (and a route re-fit)
+    // every render.
+    const updateData = {
+      pickup: pickupCoord ?? null,
+      dropoff: dropoffCoord ?? null,
+      driver: driverCoord ?? null,
+      nearby: nearbyDrivers.map((d) => ({
+        id: d.driver_id,
+        name: d.driver_name,
+        vehicle: d.vehicle_number,
+        lat: d.current_lat,
+        lng: d.current_lng,
+      })),
+    };
+    const updateJson = JSON.stringify(updateData);
+    const lastUpdateJsonRef = useRef<string | null>(null);
+
+    const injectUpdateData = (force: boolean) => {
+      if (!force && lastUpdateJsonRef.current === updateJson) return;
+      lastUpdateJsonRef.current = updateJson;
+      const js = `if (window.updateMapData) { window.updateMapData(${updateJson}); }`;
       webViewRef.current?.injectJavaScript(js);
-    }, [pickupCoord, dropoffCoord, driverCoord, nearbyDrivers]);
+    };
+
+    // Deliberately dependency-free: callers pass new object identities on every
+    // render, so this runs each render and injects only when the payload
+    // actually changed.
+    useEffect(() => {
+      injectUpdateData(false);
+    });
+
+    // The map only exists once the HTML has loaded; injections issued before
+    // that are dropped silently, so re-sync (and re-centre) on load.
+    const handleMapLoad = () => {
+      injectUpdateData(true);
+      if (userPosition) {
+        const js = `if (window.map) { window.map.flyTo([${userPosition.latitude}, ${userPosition.longitude}], 15); }`;
+        webViewRef.current?.injectJavaScript(js);
+      }
+    };
 
     const leafletHtml = `
       <!DOCTYPE html>
@@ -237,8 +261,10 @@ export const MapViewContainer = forwardRef<MapViewRef, MapViewContainerProps>(
           let pickupMarker = null;
           let dropoffMarker = null;
           let driverMarker = null;
-          let nearbyMarkers = [];
+          let nearbyMarkers = {}; // keyed by driver id: updates move markers instead of re-creating them
           let routeLine = null;
+          let lastRouteKey = null;
+          let routeRequestId = 0;
 
           map.on('click', function(e) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -302,81 +328,106 @@ export const MapViewContainer = forwardRef<MapViewRef, MapViewContainerProps>(
               driverMarker = null;
             }
 
-            // Nearby Drivers
-            nearbyMarkers.forEach(m => map.removeLayer(m));
-            nearbyMarkers = [];
+            // Nearby Drivers (reuse markers by id to avoid visible flicker)
+            var nextNearbyIds = {};
             if (data.nearby && data.nearby.length > 0) {
-              data.nearby.forEach(d => {
+              data.nearby.forEach(function (d) {
                 if (d.lat && d.lng) {
-                  const icon = L.divIcon({
-                    className: 'custom-driver',
-                    html: '🛺',
-                    iconSize: [28, 28],
-                    iconAnchor: [14, 14]
-                  });
-                  const m = L.marker([d.lat, d.lng], { icon: icon })
-                    .bindPopup('<b>' + d.name + '</b><br>' + d.vehicle)
-                    .addTo(map);
-                  nearbyMarkers.push(m);
+                  nextNearbyIds[d.id] = true;
+                  if (nearbyMarkers[d.id]) {
+                    nearbyMarkers[d.id].setLatLng([d.lat, d.lng]);
+                    nearbyMarkers[d.id].setPopupContent('<b>' + d.name + '</b><br>' + d.vehicle);
+                  } else {
+                    var icon = L.divIcon({
+                      className: 'custom-driver',
+                      html: '🛺',
+                      iconSize: [28, 28],
+                      iconAnchor: [14, 14]
+                    });
+                    nearbyMarkers[d.id] = L.marker([d.lat, d.lng], { icon: icon })
+                      .bindPopup('<b>' + d.name + '</b><br>' + d.vehicle)
+                      .addTo(map);
+                  }
                 }
               });
             }
+            Object.keys(nearbyMarkers).forEach(function (id) {
+              if (!nextNearbyIds[id]) {
+                map.removeLayer(nearbyMarkers[id]);
+                delete nearbyMarkers[id];
+              }
+            });
 
             // Real-world road routing via OSRM (Open Source Routing Machine)
             if (data.pickup && data.dropoff) {
-              const start = data.pickup.longitude + ',' + data.pickup.latitude;
-              const end = data.dropoff.longitude + ',' + data.dropoff.latitude;
-              const osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + start + ';' + end + '?overview=full&geometries=geojson';
+              var start = data.pickup.longitude + ',' + data.pickup.latitude;
+              var end = data.dropoff.longitude + ',' + data.dropoff.latitude;
+              var routeKey = start + ';' + end;
 
-              fetch(osrmUrl)
-                .then(r => r.json())
-                .then(res => {
-                  if (res.routes && res.routes.length > 0) {
-                    const route = res.routes[0];
-                    const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
-                    
+              // Fetch and re-fit only when the pickup/dropoff pair actually
+              // changes: re-running this on every marker/GPS tick made the
+              // visible map snap back to the route over and over.
+              if (routeKey !== lastRouteKey) {
+                lastRouteKey = routeKey;
+                var requestId = ++routeRequestId;
+                var osrmUrl = 'https://router.project-osrm.org/route/v1/driving/' + start + ';' + end + '?overview=full&geometries=geojson';
+
+                fetch(osrmUrl)
+                  .then(function (r) { return r.json(); })
+                  .then(function (res) {
+                    if (requestId !== routeRequestId) return; // superseded by a newer route
+                    if (res.routes && res.routes.length > 0) {
+                      var route = res.routes[0];
+                      var coords = route.geometry.coordinates.map(function (c) { return [c[1], c[0]]; });
+
+                      if (!routeLine) {
+                        routeLine = L.polyline(coords, {
+                          color: '#0284C7',
+                          weight: 5,
+                          opacity: 0.9,
+                          lineJoin: 'round'
+                        }).addTo(map);
+                      } else {
+                        routeLine.setLatLngs(coords);
+                      }
+
+                      // Fit map view to complete route (once per new route)
+                      map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
+
+                      // Show distance and estimated tricycle travel time (avg 25 km/h)
+                      var distKm = (route.distance / 1000).toFixed(1);
+                      var durationMins = Math.max(1, Math.round((route.distance / 1000 / 25) * 60));
+
+                      document.getElementById('route-dist').innerText = distKm + ' km';
+                      document.getElementById('route-time').innerText = '~' + durationMins + ' mins';
+                      document.getElementById('route-card').style.display = 'flex';
+                    }
+                  })
+                  .catch(function () {
+                    if (requestId !== routeRequestId) return; // superseded by a newer route
+                    // Fallback to straight dashed line if offline
+                    var latlngs = [
+                      [data.pickup.latitude, data.pickup.longitude],
+                      [data.dropoff.latitude, data.dropoff.longitude]
+                    ];
                     if (!routeLine) {
-                      routeLine = L.polyline(coords, {
-                        color: '#0284C7',
-                        weight: 5,
-                        opacity: 0.9,
-                        lineJoin: 'round'
+                      routeLine = L.polyline(latlngs, {
+                        color: '#0D9488',
+                        weight: 4,
+                        dashArray: '6, 8'
                       }).addTo(map);
                     } else {
-                      routeLine.setLatLngs(coords);
+                      routeLine.setLatLngs(latlngs);
                     }
-
-                    // Fit map view to complete route
-                    map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
-
-                    // Show distance and estimated tricycle travel time (avg 25 km/h)
-                    const distKm = (route.distance / 1000).toFixed(1);
-                    const durationMins = Math.max(1, Math.round((route.distance / 1000 / 25) * 60));
-
-                    document.getElementById('route-dist').innerText = distKm + ' km';
-                    document.getElementById('route-time').innerText = '~' + durationMins + ' mins';
-                    document.getElementById('route-card').style.display = 'flex';
-                  }
-                })
-                .catch(() => {
-                  // Fallback to straight dashed line if offline
-                  const latlngs = [
-                    [data.pickup.latitude, data.pickup.longitude],
-                    [data.dropoff.latitude, data.dropoff.longitude]
-                  ];
-                  if (!routeLine) {
-                    routeLine = L.polyline(latlngs, {
-                      color: '#0D9488',
-                      weight: 4,
-                      dashArray: '6, 8'
-                    }).addTo(map);
-                  } else {
-                    routeLine.setLatLngs(latlngs);
-                  }
-                });
-            } else if (routeLine) {
-              map.removeLayer(routeLine);
-              routeLine = null;
+                  });
+              }
+            } else if (routeLine || lastRouteKey) {
+              routeRequestId++; // drop any in-flight route response
+              lastRouteKey = null;
+              if (routeLine) {
+                map.removeLayer(routeLine);
+                routeLine = null;
+              }
               document.getElementById('route-card').style.display = 'none';
             }
           };
@@ -396,6 +447,7 @@ export const MapViewContainer = forwardRef<MapViewRef, MapViewContainerProps>(
           style={styles.map}
           javaScriptEnabled={true}
           domStorageEnabled={true}
+          onLoad={handleMapLoad}
           onMessage={(event: any) => {
             try {
               const data = JSON.parse(event.nativeEvent.data);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, Colors } from '../../theme';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -24,6 +24,7 @@ import { LocationItem } from '../../types';
 export const PassengerProfileScreen: React.FC = () => {
   const { user, passenger, signOut } = useAuthStore();
   const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
   const [savedPlaces, setSavedPlaces] = React.useState<SavedPlace[]>([]);
@@ -230,7 +231,7 @@ export const PassengerProfileScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

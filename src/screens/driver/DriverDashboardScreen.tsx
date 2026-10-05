@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import {
   DriverTabParamList,
   Ride,
 } from '../../types';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, Colors } from '../../theme';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -40,6 +40,7 @@ type Props = CompositeScreenProps<
 import { LocationPickerModal } from '../../components/map/LocationPickerModal';
 import { LocationItem } from '../../types';
 import { SidebarDrawer } from '../../components/common/SidebarDrawer';
+import { getErrorMessage } from '../../utils/errors';
 import { useTheme } from '../../hooks/useTheme';
 import { useFareSettings } from '../../hooks/useFareSettings';
 import { getCurrentCoordinates } from '../../utils/location';
@@ -48,6 +49,7 @@ export const DriverDashboardScreen: React.FC<any> = ({ navigation }) => {
   const user = useAuthStore((s) => s.user);
   const driver = useAuthStore((s) => s.driver);
   const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { settings: fareSettings } = useFareSettings();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAreaPicker, setShowAreaPicker] = useState(false);
@@ -132,6 +134,12 @@ export const DriverDashboardScreen: React.FC<any> = ({ navigation }) => {
     const checkRideEligibility = (ride: Ride) => {
       if (!ride || ride.status !== 'pending') return;
 
+      // Read the live driver snapshot instead of closing over render values:
+      // GPS ticks change currentLat/currentLng constantly, and having them in
+      // the effect deps tore down (and re-created) the realtime channel and
+      // polling interval on every tick.
+      const { currentLat, currentLng, declinedRideIds } = useDriverStore.getState();
+
       // 1. Check if driver has already declined this ride
       if (declinedRideIds.includes(ride.ride_id)) return;
 
@@ -200,6 +208,7 @@ export const DriverDashboardScreen: React.FC<any> = ({ navigation }) => {
         }
 
         const pending = await getPendingRides();
+        const { declinedRideIds } = useDriverStore.getState();
         for (const r of pending) {
           if (!declinedRideIds.includes(r.ride_id)) {
             checkRideEligibility(r);
@@ -213,7 +222,7 @@ export const DriverDashboardScreen: React.FC<any> = ({ navigation }) => {
       channel.unsubscribe();
       clearInterval(pollTimer);
     };
-  }, [isOnline, driver?.driver_id, driver?.seat_capacity, currentLat, currentLng, fareSettings?.match_radius_km, declinedRideIds, setIncomingRequest]);
+  }, [isOnline, driver?.driver_id, driver?.seat_capacity, fareSettings?.match_radius_km, setIncomingRequest]);
 
   const handleToggleOnline = async () => {
     if (!driver?.driver_id) return;
@@ -232,8 +241,8 @@ export const DriverDashboardScreen: React.FC<any> = ({ navigation }) => {
       await acceptRide(ride.ride_id, driver.driver_id);
       setIncomingRequest(null);
       navigation.navigate('ActiveTrip', { rideId: ride.ride_id });
-    } catch (err: any) {
-      Alert.alert('Ride Unavailable', err.message || 'Ride was accepted by another driver.');
+    } catch (err) {
+      Alert.alert('Ride Unavailable', getErrorMessage(err, 'Ride was accepted by another driver.'));
       setIncomingRequest(null);
     }
   };
@@ -266,9 +275,10 @@ export const DriverDashboardScreen: React.FC<any> = ({ navigation }) => {
         subtitle={`Plate: ${driver?.vehicle_number || 'N/A'} • ${driver?.seat_capacity || 6} Seats`}
         onMenu={() => setSidebarOpen(true)}
         rightElement={
-          <TouchableOpacity
-            onPress={handleToggleOnline}
-            activeOpacity={0.85}
+          // One handler per touch target: nesting the Switch inside a
+          // TouchableOpacity that also toggles fired both handlers, flipping
+          // the status twice so the switch appeared to snap straight back.
+          <View
             style={[
               styles.headerToggleBadge,
               {
@@ -283,14 +293,20 @@ export const DriverDashboardScreen: React.FC<any> = ({ navigation }) => {
                 { backgroundColor: isOnline ? colors.success : colors.textMuted },
               ]}
             />
-            <Text
-              style={[
-                styles.headerToggleText,
-                { color: isOnline ? colors.primaryDark : colors.textSecondary },
-              ]}
+            <TouchableOpacity
+              onPress={handleToggleOnline}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              {isOnline ? 'ONLINE' : 'OFFLINE'}
-            </Text>
+              <Text
+                style={[
+                  styles.headerToggleText,
+                  { color: isOnline ? colors.primaryDark : colors.textSecondary },
+                ]}
+              >
+                {isOnline ? 'ONLINE' : 'OFFLINE'}
+              </Text>
+            </TouchableOpacity>
             <Switch
               value={isOnline}
               onValueChange={handleToggleOnline}
@@ -298,7 +314,7 @@ export const DriverDashboardScreen: React.FC<any> = ({ navigation }) => {
               thumbColor={isOnline ? colors.primaryDark : colors.textMuted}
               style={styles.headerSwitch}
             />
-          </TouchableOpacity>
+          </View>
         }
       />
 
@@ -398,7 +414,7 @@ export const DriverDashboardScreen: React.FC<any> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

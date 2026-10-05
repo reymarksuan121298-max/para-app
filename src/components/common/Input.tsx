@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   TextInput,
@@ -7,9 +7,10 @@ import {
   TextInputProps,
   ViewStyle,
 } from 'react-native';
-import { colors, borderRadius, typography, spacing } from '../../theme';
+import { borderRadius, typography, spacing, Colors } from '../../theme';
+import { useTheme } from '../../hooks/useTheme';
 
-interface InputProps extends TextInputProps {
+export interface InputProps extends TextInputProps {
   label?: string;
   error?: string;
   helperText?: string;
@@ -28,6 +29,8 @@ export const Input: React.FC<InputProps> = ({
   style,
   ...rest
 }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={[styles.wrapper, containerStyle]}>
       {label && <Text style={styles.label}>{label}</Text>}
@@ -55,7 +58,7 @@ export const Input: React.FC<InputProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   wrapper: {
     marginBottom: spacing.md,
   },

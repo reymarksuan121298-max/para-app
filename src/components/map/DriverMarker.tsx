@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Marker } from 'react-native-maps';
-import { colors, borderRadius, typography } from '../../theme';
+import { borderRadius, typography, Colors } from '../../theme';
+import { useTheme } from '../../hooks/useTheme';
 import { NearbyDriver } from '../../types';
 
 interface DriverMarkerProps {
@@ -10,6 +11,8 @@ interface DriverMarkerProps {
 }
 
 export const DriverMarker: React.FC<DriverMarkerProps> = ({ driver, onPress }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   if (!driver.current_lat || !driver.current_lng) return null;
 
   return (
@@ -34,7 +37,7 @@ export const DriverMarker: React.FC<DriverMarkerProps> = ({ driver, onPress }) =
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   markerContainer: {
     alignItems: 'center',
   },

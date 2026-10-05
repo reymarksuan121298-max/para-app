@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,18 +11,19 @@ import {
 import Geolocation from '@react-native-community/geolocation';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { DriverStackParamList } from '../../types';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, Colors } from '../../theme';
 import { Header } from '../../components/common/Header';
 import { Button } from '../../components/common/Button';
 import { MapViewContainer } from '../../components/map/MapViewContainer';
 import { RideStatusCard } from '../../components/ride/RideStatusCard';
-import { LoadingOverlay } from '../../components/common/LoadingOverlay';
+import { LoadingScreen } from '../../components/common/LoadingScreen';
 import { useRealtimeRide } from '../../hooks/useRealtimeRide';
 import { completeTrip, updateRideStatus } from '../../api/rides';
 import { useAuthStore } from '../../store/authStore';
 import { useDriverStore } from '../../store/driverStore';
 import { formatCurrency } from '../../utils/fareCalculator';
 import { useTheme } from '../../hooks/useTheme';
+import { getErrorMessage } from '../../utils/errors';
 
 type Props = NativeStackScreenProps<DriverStackParamList, 'ActiveTrip'>;
 
@@ -32,6 +33,7 @@ export const ActiveTripScreen: React.FC<Props> = ({ route, navigation }) => {
   const { broadcastLocation } = useDriverStore();
   const { ride, loading } = useRealtimeRide(rideId);
   const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [updating, setUpdating] = useState(false);
 
   // High-frequency 1000ms GPS location broadcast during active incoming & ongoing trip
@@ -74,7 +76,7 @@ export const ActiveTripScreen: React.FC<Props> = ({ route, navigation }) => {
   }, [ride?.status, ride?.cancel_reason, navigation]);
 
   if (loading && !ride) {
-    return <LoadingOverlay visible message="Loading trip details..." />;
+    return <LoadingScreen message="Loading trip details..." />;
   }
 
   if (!ride) {
@@ -146,8 +148,8 @@ export const ActiveTripScreen: React.FC<Props> = ({ route, navigation }) => {
           ]
         );
       }
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to update trip status');
+    } catch (err) {
+      Alert.alert('Error', getErrorMessage(err, 'Failed to update trip status'));
     } finally {
       setUpdating(false);
     }
@@ -168,7 +170,7 @@ export const ActiveTripScreen: React.FC<Props> = ({ route, navigation }) => {
       case 'in_progress':
         return {
           title: `Complete Trip • Collect ${formatCurrency(Number(ride.fare))}`,
-          variant: 'success' as any,
+          variant: 'success' as const,
         };
       default:
         return {
@@ -234,10 +236,8 @@ export const ActiveTripScreen: React.FC<Props> = ({ route, navigation }) => {
               onPress={handleNextStatus}
               loading={updating}
               size="lg"
-              style={[
-                styles.actionBtn,
-                ride.status === 'in_progress' ? { backgroundColor: colors.success } : undefined,
-              ]}
+              variant={actionConfig.variant}
+              style={styles.actionBtn}
             />
           )}
         </View>
@@ -246,7 +246,7 @@ export const ActiveTripScreen: React.FC<Props> = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { PassengerStackParamList, LocationItem } from '../../types';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, Colors } from '../../theme';
 import { Header } from '../../components/common/Header';
 import { Button } from '../../components/common/Button';
 import { ErrorBanner } from '../../components/common/ErrorBanner';
@@ -24,6 +24,7 @@ import { useFareSettings } from '../../hooks/useFareSettings';
 
 import { Input } from '../../components/common/Input';
 import { useTheme } from '../../hooks/useTheme';
+import { getErrorMessage } from '../../utils/errors';
 
 type Props = NativeStackScreenProps<PassengerStackParamList, 'BookRide'>;
 
@@ -32,6 +33,7 @@ export const BookRideScreen: React.FC<Props> = ({ navigation }) => {
   const setActiveRide = useRideStore((s) => s.setActiveRide);
   const { settings: fareSettings } = useFareSettings();
   const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [pickup, setPickup] = useState<LocationItem | null>(null);
   const [dropoff, setDropoff] = useState<LocationItem | null>(null);
@@ -103,8 +105,8 @@ export const BookRideScreen: React.FC<Props> = ({ navigation }) => {
 
       setActiveRide(newRide);
       navigation.replace('TrackRide', { rideId: newRide.ride_id });
-    } catch (err: any) {
-      setError(err.message || 'Failed to submit ride request');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to submit ride request'));
     } finally {
       setLoading(false);
     }
@@ -227,7 +229,7 @@ export const BookRideScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

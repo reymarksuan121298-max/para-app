@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,42 +10,53 @@ import {
   Platform,
   Image,
 } from 'react-native';
+import { useForm } from 'react-hook-form';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../types';
-import { colors, typography, spacing, borderRadius } from '../../theme';
-import { Input } from '../../components/common/Input';
+import { typography, spacing, borderRadius, Colors } from '../../theme';
+import { useTheme } from '../../hooks/useTheme';
+import { FormInput } from '../../components/common/FormInput';
 import { Button } from '../../components/common/Button';
 import { ErrorBanner } from '../../components/common/ErrorBanner';
 import { signInWithEmail } from '../../api/auth';
 import { useAuthStore } from '../../store/authStore';
+import { loginSchema, zodResolver, LoginFormData } from '../../utils/validators';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
 export const LoginScreen: React.FC<Props> = ({ navigation }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const {
+    control,
+    handleSubmit,
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
+    mode: 'onBlur',
+  });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Server-side failures (bad credentials, network) live outside field validation.
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const initializeAuth = useAuthStore((s) => s.initializeAuth);
 
-  const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError('Please enter both email and password');
-      return;
-    }
-
+  const handleLogin = handleSubmit(async (values) => {
     try {
       setLoading(true);
-      setError(null);
-      await signInWithEmail(email.trim(), password);
+      setSubmitError(null);
+      await signInWithEmail(values.email.trim(), values.password);
       await initializeAuth();
-    } catch (err: any) {
-      setError(err.message || 'Login failed. Please verify your credentials.');
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Login failed. Please verify your credentials.',
+      );
     } finally {
       setLoading(false);
     }
-  };
+  });
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -72,23 +83,23 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
             <Text style={styles.welcomeText}>Welcome Back</Text>
             <Text style={styles.instructions}>Sign in to your account</Text>
 
-            <ErrorBanner message={error} />
+            <ErrorBanner message={submitError} />
 
-            <Input
+            <FormInput
+              control={control}
+              name="email"
               label="Email Address"
               placeholder="e.g. juan@example.com"
               keyboardType="email-address"
               autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
             />
 
-            <Input
+            <FormInput
+              control={control}
+              name="password"
               label="Password"
               placeholder="••••••••"
               secureTextEntry
-              value={password}
-              onChangeText={setPassword}
             />
 
             <Button
@@ -112,7 +123,7 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

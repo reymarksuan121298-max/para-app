@@ -8,12 +8,13 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
-import { colors, borderRadius, typography } from '../../theme';
+import { borderRadius, typography } from '../../theme';
+import { useTheme } from '../../hooks/useTheme';
 
 interface ButtonProps {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'danger' | 'outline' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'success' | 'danger' | 'outline' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   disabled?: boolean;
@@ -33,6 +34,8 @@ export const Button: React.FC<ButtonProps> = ({
   textStyle,
   icon,
 }) => {
+  const { colors } = useTheme();
+
   const getContainerStyle = (): ViewStyle => {
     let base: ViewStyle = styles.base;
 
@@ -48,6 +51,9 @@ export const Button: React.FC<ButtonProps> = ({
         break;
       case 'danger':
         base = { ...base, backgroundColor: colors.danger };
+        break;
+      case 'success':
+        base = { ...base, backgroundColor: colors.success };
         break;
       case 'outline':
         base = {

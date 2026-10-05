@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import {
   Modal,
   View,
@@ -9,7 +9,8 @@ import {
   TouchableOpacity,
   SafeAreaView,
 } from 'react-native';
-import { colors, borderRadius, typography, spacing } from '../../theme';
+import { borderRadius, typography, spacing, Colors } from '../../theme';
+import { useTheme } from '../../hooks/useTheme';
 import { LocationItem } from '../../types';
 import { getAllLocations } from '../../api/admin';
 import { Input } from '../common/Input';
@@ -37,6 +38,8 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
   onSelect,
   onClose,
 }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [selectedRegion, setSelectedRegion] = useState<PhilippineRegion>(DEFAULT_REGION);
   const [search, setSearch] = useState('');
   const [results, setResults] = useState<LocationItem[]>([]);
@@ -445,7 +448,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

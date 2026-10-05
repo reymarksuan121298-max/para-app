@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,54 +9,69 @@ import {
   TouchableOpacity,
   Modal,
 } from 'react-native';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { useForm } from 'react-hook-form';
+import { typography, spacing, borderRadius, Colors } from '../../theme';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
-import { Input } from '../../components/common/Input';
+import { FormInput } from '../../components/common/FormInput';
 import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../api/supabaseClient';
 import { SidebarDrawer } from '../../components/common/SidebarDrawer';
 import { useTheme } from '../../hooks/useTheme';
+import {
+  vehicleInfoSchema,
+  zodResolver,
+  VehicleInfoFormValues,
+  VehicleInfoFormData,
+} from '../../utils/validators';
 
 export const DriverProfileScreen: React.FC = () => {
   const { user, driver, signOut, initializeAuth } = useAuthStore();
   const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Edit vehicle info modal state
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const [vehicleNumber, setVehicleNumber] = useState(driver?.vehicle_number || '');
-  const [licenseNumber, setLicenseNumber] = useState(driver?.license_number || '');
-  const [seatCapacity, setSeatCapacity] = useState(String(driver?.seat_capacity || 6));
   const [saving, setSaving] = useState(false);
 
+  // Seat capacity is typed as text; the resolver converts it to a number when
+  // the form is submitted.
+  const { control, handleSubmit, reset } = useForm<
+    VehicleInfoFormValues,
+    unknown,
+    VehicleInfoFormData
+  >({
+    resolver: zodResolver(vehicleInfoSchema),
+    defaultValues: { vehicle_number: '', license_number: '', seat_capacity: '' },
+    mode: 'onBlur',
+  });
+
   const handleOpenEdit = () => {
-    setVehicleNumber(driver?.vehicle_number === 'PENDING' ? '' : (driver?.vehicle_number || ''));
-    setLicenseNumber(driver?.license_number === 'PENDING' ? '' : (driver?.license_number || ''));
-    setSeatCapacity(String(driver?.seat_capacity || 6));
+    // Re-seed the fields from the latest driver record every time it opens.
+    reset({
+      vehicle_number:
+        driver?.vehicle_number === 'PENDING' ? '' : driver?.vehicle_number || '',
+      license_number:
+        driver?.license_number === 'PENDING' ? '' : driver?.license_number || '',
+      seat_capacity: String(driver?.seat_capacity || 6),
+    });
     setEditModalVisible(true);
   };
 
-  const handleSaveVehicleInfo = async () => {
+  const handleSaveVehicleInfo = handleSubmit(async (values) => {
     if (!driver?.driver_id) return;
-    if (!vehicleNumber.trim()) {
-      Alert.alert('Required', 'Please enter your Tricycle Plate or Body Number.');
-      return;
-    }
-    if (!licenseNumber.trim()) {
-      Alert.alert('Required', 'Please enter your Driver License Number.');
-      return;
-    }
 
     try {
       setSaving(true);
       const { error } = await supabase
         .from('drivers')
         .update({
-          vehicle_number: vehicleNumber.trim().toUpperCase(),
-          license_number: licenseNumber.trim().toUpperCase(),
-          seat_capacity: parseInt(seatCapacity, 10) || 6,
+          vehicle_number: values.vehicle_number.toUpperCase(),
+          license_number: values.license_number.toUpperCase(),
+          // Parsed and range-checked by the resolver — never `NaN`.
+          seat_capacity: values.seat_capacity,
           is_verified: true,
           updated_at: new Date().toISOString(),
         })
@@ -67,12 +82,15 @@ export const DriverProfileScreen: React.FC = () => {
       await initializeAuth();
       setEditModalVisible(false);
       Alert.alert('Success 🎉', 'Vehicle details updated successfully!');
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to update vehicle details');
+    } catch (err) {
+      Alert.alert(
+        'Error',
+        err instanceof Error && err.message ? err.message : 'Failed to update vehicle details',
+      );
     } finally {
       setSaving(false);
     }
-  };
+  });
 
   const handleSignOut = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out of PARA Driver?', [
@@ -185,27 +203,27 @@ export const DriverProfileScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            <Input
+            <FormInput
+              control={control}
+              name="vehicle_number"
               label="Plate or Body Number"
               placeholder="e.g. MK-1234 or BODY-089"
-              value={vehicleNumber}
-              onChangeText={setVehicleNumber}
               autoCapitalize="characters"
             />
 
-            <Input
+            <FormInput
+              control={control}
+              name="license_number"
               label="Driver License Number"
               placeholder="e.g. L01-23-456789"
-              value={licenseNumber}
-              onChangeText={setLicenseNumber}
               autoCapitalize="characters"
             />
 
-            <Input
+            <FormInput
+              control={control}
+              name="seat_capacity"
               label="Seat Capacity (Passengers)"
               placeholder="e.g. 6"
-              value={seatCapacity}
-              onChangeText={setSeatCapacity}
               keyboardType="number-pad"
             />
 
@@ -231,7 +249,7 @@ export const DriverProfileScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

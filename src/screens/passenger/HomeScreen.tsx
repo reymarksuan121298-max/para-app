@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import {
   PassengerTabParamList,
   NearbyDriver,
 } from '../../types';
-import { colors, typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, Colors } from '../../theme';
 import { MapViewContainer } from '../../components/map/MapViewContainer';
 import { getNearbyDrivers } from '../../api/drivers';
 import { useAuthStore } from '../../store/authStore';
@@ -35,6 +35,7 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
   const user = useAuthStore((s) => s.user);
   const activeRide = useRideStore((s) => s.activeRide);
   const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [nearbyDrivers, setNearbyDrivers] = useState<NearbyDriver[]>([]);
@@ -83,10 +84,16 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
             </TouchableOpacity>
 
             <View style={{ flex: 1 }}>
-              <Text style={[styles.greeting, { color: colors.textPrimary }]}>
+              <Text
+                style={[styles.greeting, { color: colors.textPrimary }]}
+                numberOfLines={1}
+              >
                 Hello, {user?.name?.split(' ')[0] || 'Passenger'} 👋
               </Text>
-              <Text style={[styles.subtext, { color: colors.textSecondary }]}>
+              <Text
+                style={[styles.subtext, { color: colors.textSecondary }]}
+                numberOfLines={1}
+              >
                 {nearbyDrivers.length} tricycle(s) active nearby
               </Text>
             </View>
@@ -140,7 +147,7 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
