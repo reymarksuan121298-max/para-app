@@ -1,5 +1,83 @@
 import { supabase } from './supabaseClient';
 import { FareSettings, LocationItem, Ride, UserProfile } from '../types';
+import { generateUUID } from '../utils/otp';
+
+export interface CreateUserPayload {
+  name: string;
+  email: string;
+  phone: string;
+  role: 'passenger' | 'driver' | 'admin';
+  license_number?: string;
+  vehicle_number?: string;
+  seat_capacity?: number;
+}
+
+export async function adminCreateUser(payload: CreateUserPayload): Promise<UserProfile> {
+  const normalizedEmail = payload.email.trim().toLowerCase();
+
+  // Check if email already exists
+  const { data: existing } = await supabase
+    .from('users')
+    .select('user_id')
+    .ilike('email', normalizedEmail)
+    .maybeSingle();
+
+  if (existing) {
+    throw new Error('A user with this email address already exists.');
+  }
+
+  const userId = generateUUID();
+
+  // 1. Insert into public.users
+  const { data: newUser, error: userError } = await supabase
+    .from('users')
+    .insert({
+      user_id: userId,
+      name: payload.name.trim(),
+      email: normalizedEmail,
+      phone: payload.phone.trim(),
+      role: payload.role,
+      status: 'active',
+    })
+    .select()
+    .single();
+
+  if (userError || !newUser) {
+    throw new Error(userError?.message || 'Failed to create user account');
+  }
+
+  // 2. If passenger, create passenger record
+  if (payload.role === 'passenger') {
+    await supabase.from('passengers').insert({ user_id: userId });
+  }
+
+  // 3. If driver, create driver record
+  if (payload.role === 'driver') {
+    const shortSuffix = userId.substring(0, 4).toUpperCase();
+    await supabase.from('drivers').insert({
+      user_id: userId,
+      license_number: payload.license_number?.trim() || `LIC-${shortSuffix}`,
+      vehicle_number: payload.vehicle_number?.trim() || `TR-${shortSuffix}`,
+      seat_capacity: payload.seat_capacity || 6,
+      status: 'offline',
+      is_verified: true,
+    });
+  }
+
+  return newUser as UserProfile;
+}
+
+export async function updateUserRole(userId: string, role: 'passenger' | 'driver' | 'admin') {
+  const { data, error } = await supabase
+    .from('users')
+    .update({ role, updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as UserProfile;
+}
 
 export async function getAdminOverviewStats() {
   const [usersRes, driversRes, ridesRes, completedRidesRes] = await Promise.all([

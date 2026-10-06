@@ -19,6 +19,7 @@ import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../api/supabaseClient';
 import { SidebarDrawer } from '../../components/common/SidebarDrawer';
 import { useTheme } from '../../hooks/useTheme';
+import { ProfileAvatar } from '../../components/common/ProfileAvatar';
 import {
   vehicleInfoSchema,
   zodResolver,
@@ -118,9 +119,8 @@ export const DriverProfileScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Profile Card */}
         <Card style={styles.profileCard}>
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarIcon}>🛺</Text>
-          </View>
+          <ProfileAvatar size={84} editable role="driver" />
+          <Text style={styles.tapToChangeText}>Tap photo to change</Text>
           <Text style={[styles.userName, { color: colors.textPrimary }]}>{user?.name || 'Driver'}</Text>
           <Text style={[styles.userEmail, { color: colors.textSecondary }]}>{user?.email}</Text>
           <View style={styles.tagRow}>
@@ -274,6 +274,13 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   },
   avatarIcon: {
     fontSize: 32,
+  },
+  tapToChangeText: {
+    ...typography.caption,
+    color: colors.primaryDark,
+    fontSize: 10,
+    marginTop: 4,
+    marginBottom: spacing.xs,
   },
   userName: {
     ...typography.heading2,

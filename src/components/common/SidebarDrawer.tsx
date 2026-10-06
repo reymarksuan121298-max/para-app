@@ -14,6 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuthStore } from '../../store/authStore';
 import { typography, spacing, borderRadius } from '../../theme';
 import { formatCurrency } from '../../utils/fareCalculator';
+import { ProfileAvatar } from './ProfileAvatar';
 
 interface SidebarDrawerProps {
   visible: boolean;
@@ -109,10 +110,8 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({ visible, onClose }
         >
           {/* Header Profile Section */}
           <View style={[styles.profileSection, { borderBottomColor: sidebarBorder }]}>
-            <View style={[styles.avatarCircle, { backgroundColor: avatarCircleBg, borderColor: colors.primary }]}>
-              <Text style={styles.avatarEmoji}>
-                {user?.role === 'admin' ? '🛡️' : isDriver ? '🛺' : '👤'}
-              </Text>
+            <View style={{ marginBottom: spacing.sm }}>
+              <ProfileAvatar size={66} editable={false} role={user?.role} />
             </View>
             <Text style={[styles.userName, { color: sidebarText }]}>{user?.name || 'PARA User'}</Text>
             <Text style={[styles.userRole, { color: sidebarSubtext }]}>

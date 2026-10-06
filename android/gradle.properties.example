@@ -1,0 +1,14 @@
+# Project-wide Gradle settings.
+
+# JVM arguments
+org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m
+
+# AndroidX package structure
+android.useAndroidX=true
+android.enableJetifier=true
+
+# Hermes JS engine
+hermesEnabled=true
+
+# New Architecture
+newArchEnabled=false

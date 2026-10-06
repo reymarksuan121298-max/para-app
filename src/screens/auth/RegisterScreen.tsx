@@ -21,6 +21,9 @@ import { ErrorBanner } from '../../components/common/ErrorBanner';
 import { signUpDriver, signUpPassenger } from '../../api/auth';
 import { useAuthStore } from '../../store/authStore';
 import { registerResolver, RegisterFormData } from '../../utils/validators';
+import { OtpVerificationModal } from '../../components/common/OtpVerificationModal';
+import { sendOtpEmail } from '../../api/emailService';
+import { generateOtp } from '../../utils/otp';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
@@ -29,6 +32,12 @@ export const RegisterScreen: React.FC<Props> = ({ route, navigation }) => {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const defaultRole = route.params?.defaultRole || 'passenger';
   const [role, setRole] = useState<'passenger' | 'driver'>(defaultRole);
+
+  // OTP Verification state
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [expectedOtp, setExpectedOtp] = useState('');
+  const [isMockOtp, setIsMockOtp] = useState(false);
+  const [pendingValues, setPendingValues] = useState<RegisterFormData | null>(null);
 
   // The driver schema adds license / vehicle / seat capacity validation, so the
   // resolver is rebuilt whenever the selected role changes.
@@ -53,37 +62,84 @@ export const RegisterScreen: React.FC<Props> = ({ route, navigation }) => {
 
   const initializeAuth = useAuthStore((s) => s.initializeAuth);
 
+  // Step 1: Validate form, generate OTP, send email via EmailJS, and show OTP modal
   const handleRegister = handleSubmit(async (values) => {
     try {
       setLoading(true);
       setSubmitError(null);
 
-      if (role === 'passenger') {
-        await signUpPassenger({
-          name: values.name.trim(),
-          email: values.email.trim(),
-          phone: values.phone.trim(),
-          password: values.password,
-        });
-      } else {
-        await signUpDriver({
-          name: values.name.trim(),
-          email: values.email.trim(),
-          phone: values.phone.trim(),
-          password: values.password,
-          license_number: (values.license_number ?? '').trim(),
-          vehicle_number: (values.vehicle_number ?? '').trim(),
-          seat_capacity: values.seat_capacity ?? 6,
-        });
+      const otp = generateOtp();
+      const sendResult = await sendOtpEmail({
+        toEmail: values.email.trim(),
+        toName: values.name.trim(),
+        otpCode: otp,
+        role,
+      });
+
+      if (!sendResult.success) {
+        setSubmitError(sendResult.message || 'Failed to send OTP verification email.');
+        return;
       }
 
-      await initializeAuth();
+      setPendingValues(values);
+      setExpectedOtp(otp);
+      setIsMockOtp(!!sendResult.isMock);
+      setShowOtpModal(true);
     } catch (err) {
-      setSubmitError(err instanceof Error && err.message ? err.message : 'Registration failed');
+      setSubmitError(err instanceof Error && err.message ? err.message : 'Failed to initiate registration');
     } finally {
       setLoading(false);
     }
   });
+
+  // Step 2: Once OTP is verified in modal, create the account
+  const handleOtpVerified = async () => {
+    if (!pendingValues) return;
+
+    if (role === 'passenger') {
+      await signUpPassenger({
+        name: pendingValues.name.trim(),
+        email: pendingValues.email.trim(),
+        phone: pendingValues.phone.trim(),
+        password: pendingValues.password,
+      });
+    } else {
+      await signUpDriver({
+        name: pendingValues.name.trim(),
+        email: pendingValues.email.trim(),
+        phone: pendingValues.phone.trim(),
+        password: pendingValues.password,
+        license_number: (pendingValues.license_number ?? '').trim(),
+        vehicle_number: (pendingValues.vehicle_number ?? '').trim(),
+        seat_capacity: pendingValues.seat_capacity ?? 6,
+      });
+    }
+
+    setShowOtpModal(false);
+    await initializeAuth();
+  };
+
+  // Step 3: Resend OTP via EmailJS
+  const handleResendOtp = async (): Promise<string | null> => {
+    if (!pendingValues) return null;
+
+    const newOtp = generateOtp();
+    const sendResult = await sendOtpEmail({
+      toEmail: pendingValues.email.trim(),
+      toName: pendingValues.name.trim(),
+      otpCode: newOtp,
+      role,
+    });
+
+    if (!sendResult.success) {
+      setSubmitError(sendResult.message || 'Failed to resend code');
+      return null;
+    }
+
+    setExpectedOtp(newOtp);
+    setIsMockOtp(!!sendResult.isMock);
+    return newOtp;
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -212,6 +268,16 @@ export const RegisterScreen: React.FC<Props> = ({ route, navigation }) => {
           />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <OtpVerificationModal
+        visible={showOtpModal}
+        email={pendingValues?.email || ''}
+        expectedOtp={expectedOtp}
+        isMock={isMockOtp}
+        onSuccess={handleOtpVerified}
+        onResend={handleResendOtp}
+        onClose={() => setShowOtpModal(false)}
+      />
     </SafeAreaView>
   );
 };

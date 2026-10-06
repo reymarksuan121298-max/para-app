@@ -76,7 +76,27 @@ export async function requestRide(params: CreateRideParams): Promise<Ride> {
     dropoffLocId = pickupLocId;
   }
 
-  // 3. Insert ride
+  // 3. Try creating ride request via atomic RPC function
+  try {
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('create_ride_request', {
+      p_passenger_id: params.passenger_id,
+      p_pickup_lat: params.pickup_lat,
+      p_pickup_lng: params.pickup_lng,
+      p_pickup_address: params.pickup_address,
+      p_dropoff_lat: params.dropoff_lat,
+      p_dropoff_lng: params.dropoff_lng,
+      p_dropoff_address: params.dropoff_address,
+      p_passenger_count: params.passenger_count,
+      p_pickup_location_id: pickupLocId,
+      p_dropoff_location_id: dropoffLocId,
+    });
+
+    if (!rpcError && rpcResult?.ride_id) {
+      return await getRideDetails(rpcResult.ride_id);
+    }
+  } catch {}
+
+  // 4. Fallback: Direct table insert
   const { data: ride, error: rideError } = await supabase
     .from('rides')
     .insert({

@@ -77,7 +77,7 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            signingConfig signingConfigs.release
+            signingConfig (project.hasProperty('PARA_STORE_FILE') ? signingConfigs.release : signingConfigs.debug)
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
@@ -93,9 +93,11 @@ android {
 dependencies {
     implementation("com.facebook.react:react-android")
 
-    if (hermesEnabled.toBoolean()) {
+    def isHermes = (project.findProperty("hermesEnabled") ?: "true").toBoolean()
+    if (isHermes) {
         implementation("com.facebook.react:hermes-android")
     } else {
+        def jscFlavor = project.findProperty("jscFlavor") ?: "org.webkit:android-jsc:+"
         implementation jscFlavor
     }
 }

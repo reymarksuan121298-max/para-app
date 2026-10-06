@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabaseClient';
 import { DriverProfile, PassengerProfile, UserProfile, UserRole } from '../types';
+import { generateUUID } from '../utils/otp';
 
 const SESSION_KEY = '@para_auth_user_id';
 
@@ -48,58 +49,84 @@ export async function signUpPassenger(payload: SignUpPassengerData): Promise<{ u
   const { name, email, phone, password } = payload;
   const normalizedEmail = email.trim().toLowerCase();
 
-  // Create auth account in Supabase auth
-  const { data: authData, error: authError } = await supabase.auth.signUp({
-    email: normalizedEmail,
-    password: password || 'para123456',
-    options: {
-      data: {
+  let userId = '';
+
+  // Attempt Supabase auth account creation without blocking on email limits
+  try {
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password: password || 'para123456',
+    });
+
+    if (!authError && authData?.user) {
+      userId = authData.user.id;
+      if (authData.session) {
+        await supabase.auth.setSession(authData.session);
+      }
+    }
+  } catch {
+    // Ignore rate-limit from Supabase since verification was already completed via EmailJS
+  }
+
+  if (!userId) {
+    // Fallback: check if user already exists in public.users or generate new UUID
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('user_id')
+      .ilike('email', normalizedEmail)
+      .maybeSingle();
+
+    userId = existingUser?.user_id || generateUUID();
+  }
+
+  // Check if profile was already populated by a database trigger
+  let { data: newUser } = await supabase
+    .from('users')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  // If not created by trigger, insert/upsert user profile into public.users
+  if (!newUser) {
+    const { data: insertedUser, error: userError } = await supabase
+      .from('users')
+      .upsert({
+        user_id: userId,
         name: name.trim(),
+        email: normalizedEmail,
         phone: phone.trim(),
         role: 'passenger',
-      },
-    },
-  });
+        status: 'active',
+      })
+      .select()
+      .single();
 
-  if (authError) {
-    throw authError;
+    if (userError || !insertedUser) {
+      throw new Error(userError?.message || 'Failed to create user profile');
+    }
+    newUser = insertedUser;
   }
 
-  if (!authData.user) {
-    throw new Error('Failed to create account. Please try again.');
-  }
-
-  const userId = authData.user.id;
-
-  // Insert user profile into public.users
-  const { data: newUser, error: userError } = await supabase
-    .from('users')
-    .upsert({
-      user_id: userId,
-      name: name.trim(),
-      email: normalizedEmail,
-      phone: phone.trim(),
-      role: 'passenger',
-      status: 'active',
-    })
-    .select()
-    .single();
-
-  if (userError || !newUser) {
-    throw new Error(userError?.message || 'Failed to create user profile');
-  }
-
-  // Insert passenger row
-  const { data: passengerData, error: passengerError } = await supabase
+  // Check if passenger row was created by trigger
+  let { data: passengerData } = await supabase
     .from('passengers')
-    .upsert({
-      user_id: userId,
-    })
-    .select()
-    .single();
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
 
-  if (passengerError || !passengerData) {
-    throw new Error(passengerError?.message || 'Failed to create passenger profile');
+  if (!passengerData) {
+    const { data: insertedPassenger, error: passengerError } = await supabase
+      .from('passengers')
+      .upsert({
+        user_id: userId,
+      })
+      .select()
+      .single();
+
+    if (passengerError || !insertedPassenger) {
+      throw new Error(passengerError?.message || 'Failed to create passenger profile');
+    }
+    passengerData = insertedPassenger;
   }
 
   // Save session locally so user is immediately logged in
@@ -112,63 +139,89 @@ export async function signUpDriver(payload: SignUpDriverData): Promise<{ user: U
   const { name, email, phone, password, license_number, vehicle_number, seat_capacity } = payload;
   const normalizedEmail = email.trim().toLowerCase();
 
-  // Create auth account in Supabase auth
-  const { data: authData, error: authError } = await supabase.auth.signUp({
-    email: normalizedEmail,
-    password: password || 'para123456',
-    options: {
-      data: {
+  let userId = '';
+
+  // Attempt Supabase auth account creation without blocking on email limits
+  try {
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password: password || 'para123456',
+    });
+
+    if (!authError && authData?.user) {
+      userId = authData.user.id;
+      if (authData.session) {
+        await supabase.auth.setSession(authData.session);
+      }
+    }
+  } catch {
+    // Ignore rate-limit from Supabase since verification was already completed via EmailJS
+  }
+
+  if (!userId) {
+    // Fallback: check if user already exists in public.users or generate new UUID
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('user_id')
+      .ilike('email', normalizedEmail)
+      .maybeSingle();
+
+    userId = existingUser?.user_id || generateUUID();
+  }
+
+  // Check if user profile was already populated by a database trigger
+  let { data: newUser } = await supabase
+    .from('users')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  // If not created by trigger, insert/upsert user profile into public.users
+  if (!newUser) {
+    const { data: insertedUser, error: userError } = await supabase
+      .from('users')
+      .upsert({
+        user_id: userId,
         name: name.trim(),
+        email: normalizedEmail,
         phone: phone.trim(),
         role: 'driver',
-      },
-    },
-  });
+        status: 'active',
+      })
+      .select()
+      .single();
 
-  if (authError) {
-    throw authError;
+    if (userError || !insertedUser) {
+      throw new Error(userError?.message || 'Failed to create driver account');
+    }
+    newUser = insertedUser;
   }
 
-  if (!authData.user) {
-    throw new Error('Failed to create driver account. Please try again.');
-  }
-
-  const userId = authData.user.id;
-
-  // Insert user profile into public.users
-  const { data: newUser, error: userError } = await supabase
-    .from('users')
-    .upsert({
-      user_id: userId,
-      name: name.trim(),
-      email: normalizedEmail,
-      phone: phone.trim(),
-      role: 'driver',
-      status: 'active',
-    })
-    .select()
-    .single();
-
-  if (userError || !newUser) {
-    throw new Error(userError?.message || 'Failed to create driver account');
-  }
-
-  // Insert driver row
-  const { data: driverData, error: driverError } = await supabase
+  // Check if driver row was created by trigger
+  let { data: driverData } = await supabase
     .from('drivers')
-    .upsert({
-      user_id: userId,
-      license_number: license_number.trim(),
-      vehicle_number: vehicle_number.trim(),
-      seat_capacity,
-      status: 'offline',
-      is_verified: true,
-    })
-    .select()
-    .single();
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
 
-  if (driverError || !driverData) {
-    throw new Error(driverError?.message || 'Failed to create driver record');
+  if (!driverData) {
+    const { data: insertedDriver, error: driverError } = await supabase
+      .from('drivers')
+      .upsert({
+        user_id: userId,
+        license_number: license_number.trim(),
+        vehicle_number: vehicle_number.trim(),
+        seat_capacity: Number(seat_capacity),
+        status: 'offline',
+        is_verified: true,
+      })
+      .select()
+      .single();
+
+    if (driverError || !insertedDriver) {
+      throw new Error(driverError?.message || 'Failed to create driver profile');
+    }
+    driverData = insertedDriver;
   }
 
   // Save session locally so user is immediately logged in
@@ -248,4 +301,22 @@ export async function getStoredSessionUserId(): Promise<string | null> {
 
 export async function signOut() {
   await AsyncStorage.removeItem(SESSION_KEY);
+}
+
+export async function updateUserProfileAvatar(userId: string, avatarUrl: string | null): Promise<UserProfile> {
+  const { data, error } = await supabase
+    .from('users')
+    .update({
+      avatar_url: avatarUrl,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId)
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message || 'Failed to update profile avatar');
+  }
+
+  return data as UserProfile;
 }

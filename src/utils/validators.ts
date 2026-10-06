@@ -193,3 +193,18 @@ export const registerResolver = (role: 'passenger' | 'driver'): Resolver<Registe
     role === 'driver' ? registerDriverSchema : registerPassengerSchema;
   return zodResolver(schema);
 };
+
+export const adminCreateUserSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z
+    .string()
+    .min(1, 'Email is required')
+    .email('Please enter a valid email address'),
+  phone: z.string().min(10, 'Please enter a valid mobile number'),
+  role: z.enum(['passenger', 'driver', 'admin']),
+  license_number: z.string().optional(),
+  vehicle_number: z.string().optional(),
+  seat_capacity: z.coerce.number().int().min(5).max(7).optional(),
+});
+
+export type AdminCreateUserFormData = z.infer<typeof adminCreateUserSchema>;

@@ -20,6 +20,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { getSavedPlaces, savePlace, removeSavedPlace, SavedPlace } from '../../utils/savedLocations';
 import { LocationPickerModal } from '../../components/map/LocationPickerModal';
 import { LocationItem } from '../../types';
+import { ProfileAvatar } from '../../components/common/ProfileAvatar';
 
 export const PassengerProfileScreen: React.FC = () => {
   const { user, passenger, signOut } = useAuthStore();
@@ -105,9 +106,8 @@ export const PassengerProfileScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* User Card */}
         <Card style={styles.profileCard}>
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarIcon}>👤</Text>
-          </View>
+          <ProfileAvatar size={84} editable role="passenger" />
+          <Text style={styles.tapToChangeText}>Tap photo to change</Text>
           <Text style={[styles.userName, { color: colors.textPrimary }]}>{user?.name || 'Passenger'}</Text>
           <Text style={[styles.userEmail, { color: colors.textSecondary }]}>{user?.email}</Text>
           <View style={styles.roleTag}>
@@ -256,6 +256,13 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   },
   avatarIcon: {
     fontSize: 32,
+  },
+  tapToChangeText: {
+    ...typography.caption,
+    color: colors.primaryDark,
+    fontSize: 10,
+    marginTop: 4,
+    marginBottom: spacing.xs,
   },
   userName: {
     ...typography.heading2,

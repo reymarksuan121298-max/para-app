@@ -32,6 +32,7 @@
         "react-hook-form": "^7.54.2",
         "react-native": "0.76.7",
         "react-native-config": "^1.5.3",
+        "react-native-image-picker": "^8.2.1",
         "react-native-maps": "1.18.0",
         "react-native-safe-area-context": "^5.2.0",
         "react-native-screens": "3.35.0",

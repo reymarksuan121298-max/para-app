@@ -64,6 +64,7 @@ export const DriverDashboardScreen: React.FC<any> = ({ navigation }) => {
     toggleOnline,
     setIncomingRequest,
     declineRequest,
+    isLoading,
   } = useDriverStore();
 
   const [earningsSummary, setEarningsSummary] = useState({
@@ -225,9 +226,21 @@ export const DriverDashboardScreen: React.FC<any> = ({ navigation }) => {
   }, [isOnline, driver?.driver_id, driver?.seat_capacity, fareSettings?.match_radius_km, setIncomingRequest]);
 
   const handleToggleOnline = async () => {
-    if (!driver?.driver_id) return;
+    if (!driver?.driver_id) {
+      Alert.alert(
+        'Driver Profile Missing',
+        'Could not locate your driver account record. Please sign out and sign back in.'
+      );
+      return;
+    }
+    const targetStatus = !isOnline;
     await toggleOnline(driver.driver_id);
-    if (!isOnline) {
+    const storeError = useDriverStore.getState().error;
+    if (storeError) {
+      Alert.alert('Status Update Failed', storeError);
+      return;
+    }
+    if (targetStatus) {
       const coords = await getCurrentCoordinates();
       if (coords) {
         await useDriverStore.getState().broadcastLocation(driver.driver_id, coords.latitude, coords.longitude);
@@ -275,17 +288,18 @@ export const DriverDashboardScreen: React.FC<any> = ({ navigation }) => {
         subtitle={`Plate: ${driver?.vehicle_number || 'N/A'} • ${driver?.seat_capacity || 6} Seats`}
         onMenu={() => setSidebarOpen(true)}
         rightElement={
-          // One handler per touch target: nesting the Switch inside a
-          // TouchableOpacity that also toggles fired both handlers, flipping
-          // the status twice so the switch appeared to snap straight back.
-          <View
+          <TouchableOpacity
             style={[
               styles.headerToggleBadge,
               {
                 backgroundColor: isOnline ? (colors.primarySubtle || '#DCFCE7') : colors.surface,
                 borderColor: isOnline ? colors.primary : colors.border,
+                opacity: isLoading ? 0.6 : 1,
               },
             ]}
+            onPress={handleToggleOnline}
+            disabled={isLoading}
+            activeOpacity={0.7}
           >
             <View
               style={[
@@ -293,28 +307,23 @@ export const DriverDashboardScreen: React.FC<any> = ({ navigation }) => {
                 { backgroundColor: isOnline ? colors.success : colors.textMuted },
               ]}
             />
-            <TouchableOpacity
-              onPress={handleToggleOnline}
-              activeOpacity={0.7}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            <Text
+              style={[
+                styles.headerToggleText,
+                { color: isOnline ? colors.primaryDark : colors.textSecondary },
+              ]}
             >
-              <Text
-                style={[
-                  styles.headerToggleText,
-                  { color: isOnline ? colors.primaryDark : colors.textSecondary },
-                ]}
-              >
-                {isOnline ? 'ONLINE' : 'OFFLINE'}
-              </Text>
-            </TouchableOpacity>
+              {isOnline ? 'ONLINE' : 'OFFLINE'}
+            </Text>
             <Switch
               value={isOnline}
               onValueChange={handleToggleOnline}
+              disabled={isLoading}
               trackColor={{ false: colors.border, true: colors.primaryLight }}
               thumbColor={isOnline ? colors.primaryDark : colors.textMuted}
               style={styles.headerSwitch}
             />
-          </View>
+          </TouchableOpacity>
         }
       />
 
