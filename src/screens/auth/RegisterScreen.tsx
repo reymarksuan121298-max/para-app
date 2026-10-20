@@ -18,7 +18,7 @@ import { Header } from '../../components/common/Header';
 import { FormInput } from '../../components/common/FormInput';
 import { Button } from '../../components/common/Button';
 import { ErrorBanner } from '../../components/common/ErrorBanner';
-import { signUpDriver, signUpPassenger } from '../../api/auth';
+import { signUpDriver, signUpPassenger, checkEmailAvailable } from '../../api/auth';
 import { useAuthStore } from '../../store/authStore';
 import { registerResolver, RegisterFormData } from '../../utils/validators';
 import { OtpVerificationModal } from '../../components/common/OtpVerificationModal';
@@ -61,12 +61,22 @@ export const RegisterScreen: React.FC<Props> = ({ route, navigation }) => {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const initializeAuth = useAuthStore((s) => s.initializeAuth);
+  const setAuthenticatedSession = useAuthStore((s) => s.setAuthenticatedSession);
 
-  // Step 1: Validate form, generate OTP, send email via EmailJS, and show OTP modal
+  // Step 1: Validate form, check email uniqueness, generate OTP, send email via EmailJS, and show OTP modal
   const handleRegister = handleSubmit(async (values) => {
     try {
       setLoading(true);
       setSubmitError(null);
+
+      // Verify email is not already taken
+      const availability = await checkEmailAvailable(values.email);
+      if (!availability.available) {
+        setSubmitError(
+          `An account with this email address already exists (${availability.existingRole || 'user'}). Please sign in instead.`
+        );
+        return;
+      }
 
       const otp = generateOtp();
       const sendResult = await sendOtpEmail({
@@ -92,19 +102,20 @@ export const RegisterScreen: React.FC<Props> = ({ route, navigation }) => {
     }
   });
 
-  // Step 2: Once OTP is verified in modal, create the account
+  // Step 2: Once OTP is verified in modal, create the account and transition immediately
   const handleOtpVerified = async () => {
     if (!pendingValues) return;
 
     if (role === 'passenger') {
-      await signUpPassenger({
+      const { user, passenger } = await signUpPassenger({
         name: pendingValues.name.trim(),
         email: pendingValues.email.trim(),
         phone: pendingValues.phone.trim(),
         password: pendingValues.password,
       });
+      setAuthenticatedSession(user, { passenger });
     } else {
-      await signUpDriver({
+      const { user, driver } = await signUpDriver({
         name: pendingValues.name.trim(),
         email: pendingValues.email.trim(),
         phone: pendingValues.phone.trim(),
@@ -113,6 +124,7 @@ export const RegisterScreen: React.FC<Props> = ({ route, navigation }) => {
         vehicle_number: (pendingValues.vehicle_number ?? '').trim(),
         seat_capacity: pendingValues.seat_capacity ?? 6,
       });
+      setAuthenticatedSession(user, { driver });
     }
 
     setShowOtpModal(false);

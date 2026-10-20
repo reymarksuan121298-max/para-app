@@ -14,6 +14,10 @@ interface AuthState {
   setUser: (user: UserProfile | null) => void;
   setPassenger: (passenger: PassengerProfile | null) => void;
   setDriver: (driver: DriverProfile | null) => void;
+  setAuthenticatedSession: (
+    user: UserProfile,
+    options?: { passenger?: PassengerProfile | null; driver?: DriverProfile | null }
+  ) => void;
   initializeAuth: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -30,6 +34,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setUser: (user) => set({ user, isAuthenticated: !!user }),
   setPassenger: (passenger) => set({ passenger }),
   setDriver: (driver) => set({ driver }),
+  setAuthenticatedSession: (user, options) =>
+    set({
+      user,
+      passenger: options?.passenger || null,
+      driver: options?.driver || null,
+      isAuthenticated: true,
+      isLoading: false,
+      error: null,
+    }),
 
   initializeAuth: async () => {
     try {
