@@ -79,6 +79,14 @@ export async function sendOtpEmail(params: SendOtpParams): Promise<EmailServiceR
 
       if (response.status === 403 && errorText.includes('strict mode')) {
         hint = ' (Fix: Go to EmailJS Dashboard > Account > Security and disable "Strict Mode", or add your Private Key as EMAILJS_PRIVATE_KEY in .env)';
+        if (__DEV__) {
+          console.warn(`[EmailJS 403 Strict Mode] Dev fallback enabled. Verification code: ${otpCode}`);
+          return {
+            success: true,
+            isMock: true,
+            message: `[Dev Fallback] Verification code: ${otpCode}`,
+          };
+        }
       } else if (response.status === 502) {
         hint = ' (Fix: Go to EmailJS Dashboard > Email Services. Verify that your email service like Gmail/Outlook is active and connected)';
       }
