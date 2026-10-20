@@ -26,7 +26,7 @@ export async function sendOtpEmail(params: SendOtpParams): Promise<EmailServiceR
 
   const templateId = Config.EMAILJS_TEMPLATE_ID || process.env.EMAILJS_TEMPLATE_ID || 'template_ebugcpd';
   const publicKey = Config.EMAILJS_PUBLIC_KEY || process.env.EMAILJS_PUBLIC_KEY || '5tV1k3l8H09I6n1KX';
-  const privateKey = Config.EMAILJS_PRIVATE_KEY || process.env.EMAILJS_PRIVATE_KEY;
+  const privateKey = Config.EMAILJS_PRIVATE_KEY || process.env.EMAILJS_PRIVATE_KEY || 'wRdXZPyyJcpghhBZFUvHM';
 
   const { toEmail, toName, otpCode, role = 'passenger' } = params;
 
