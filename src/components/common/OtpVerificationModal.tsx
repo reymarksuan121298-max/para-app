@@ -19,7 +19,6 @@ interface OtpVerificationModalProps {
   visible: boolean;
   email: string;
   expectedOtp: string;
-  isMock?: boolean;
   onSuccess: () => Promise<void> | void;
   onResend: () => Promise<string | null>; // Returns the newly generated OTP or null
   onClose: () => void;
@@ -31,7 +30,6 @@ export const OtpVerificationModal: React.FC<OtpVerificationModalProps> = ({
   visible,
   email,
   expectedOtp,
-  isMock = false,
   onSuccess,
   onResend,
   onClose,
@@ -125,14 +123,6 @@ export const OtpVerificationModal: React.FC<OtpVerificationModalProps> = ({
             <Text style={styles.emailHighlight}>{email}</Text>
           </Text>
 
-          {isMock && (
-            <View style={styles.devBanner}>
-              <Text style={styles.devBannerText}>
-                🧪 Test Mode Code: <Text style={styles.devCode}>{currentExpectedOtp}</Text>
-              </Text>
-            </View>
-          )}
-
           <ErrorBanner message={errorMessage} />
 
           <TextInput
@@ -223,24 +213,6 @@ const makeStyles = (colors: Colors) =>
     emailHighlight: {
       color: colors.textPrimary,
       fontWeight: '600',
-    },
-    devBanner: {
-      backgroundColor: colors.card,
-      paddingVertical: spacing.xs,
-      paddingHorizontal: spacing.sm,
-      borderRadius: borderRadius.sm,
-      marginBottom: spacing.sm,
-      borderWidth: 1,
-      borderColor: colors.primary,
-    },
-    devBannerText: {
-      ...typography.caption,
-      color: colors.textPrimary,
-    },
-    devCode: {
-      fontWeight: '700',
-      color: colors.primary,
-      letterSpacing: 2,
     },
     otpInput: {
       width: '100%',

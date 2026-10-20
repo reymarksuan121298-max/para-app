@@ -10,7 +10,6 @@ export interface SendOtpParams {
 export interface EmailServiceResult {
   success: boolean;
   message?: string;
-  isMock?: boolean;
 }
 
 const EMAILJS_API_URL = 'https://api.emailjs.com/api/v1.0/email/send';
@@ -31,15 +30,7 @@ export async function sendOtpEmail(params: SendOtpParams): Promise<EmailServiceR
 
   const { toEmail, toName, otpCode, role = 'passenger' } = params;
 
-  // Development fallback when EmailJS keys are not yet configured in .env
   if (!serviceId || !templateId || !publicKey) {
-    if (__DEV__) {
-      return {
-        success: true,
-        isMock: true,
-        message: `[DEV MODE] EmailJS keys missing in .env. OTP code is: ${otpCode}`,
-      };
-    }
     return {
       success: false,
       message: 'EmailJS is not configured. Please add EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, and EMAILJS_PUBLIC_KEY in .env.',
@@ -79,14 +70,6 @@ export async function sendOtpEmail(params: SendOtpParams): Promise<EmailServiceR
 
       if (response.status === 403 && errorText.includes('strict mode')) {
         hint = ' (Fix: Go to EmailJS Dashboard > Account > Security and disable "Strict Mode", or add your Private Key as EMAILJS_PRIVATE_KEY in .env)';
-        if (__DEV__) {
-          console.warn(`[EmailJS 403 Strict Mode] Dev fallback enabled. Verification code: ${otpCode}`);
-          return {
-            success: true,
-            isMock: true,
-            message: `[Dev Fallback] Verification code: ${otpCode}`,
-          };
-        }
       } else if (response.status === 502) {
         hint = ' (Fix: Go to EmailJS Dashboard > Email Services. Verify that your email service like Gmail/Outlook is active and connected)';
       }

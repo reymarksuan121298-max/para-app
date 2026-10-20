@@ -36,7 +36,6 @@ export const RegisterScreen: React.FC<Props> = ({ route, navigation }) => {
   // OTP Verification state
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [expectedOtp, setExpectedOtp] = useState('');
-  const [isMockOtp, setIsMockOtp] = useState(false);
   const [pendingValues, setPendingValues] = useState<RegisterFormData | null>(null);
 
   // The driver schema adds license / vehicle / seat capacity validation, so the
@@ -93,7 +92,6 @@ export const RegisterScreen: React.FC<Props> = ({ route, navigation }) => {
 
       setPendingValues(values);
       setExpectedOtp(otp);
-      setIsMockOtp(!!sendResult.isMock);
       setShowOtpModal(true);
     } catch (err) {
       setSubmitError(err instanceof Error && err.message ? err.message : 'Failed to initiate registration');
@@ -149,7 +147,6 @@ export const RegisterScreen: React.FC<Props> = ({ route, navigation }) => {
     }
 
     setExpectedOtp(newOtp);
-    setIsMockOtp(!!sendResult.isMock);
     return newOtp;
   };
 
@@ -285,7 +282,6 @@ export const RegisterScreen: React.FC<Props> = ({ route, navigation }) => {
         visible={showOtpModal}
         email={pendingValues?.email || ''}
         expectedOtp={expectedOtp}
-        isMock={isMockOtp}
         onSuccess={handleOtpVerified}
         onResend={handleResendOtp}
         onClose={() => setShowOtpModal(false)}
