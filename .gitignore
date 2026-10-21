@@ -35,3 +35,4 @@ ios/*.xcworkspace/xcuserdata/
 # Temporary files
 *.tmp
 *.log
+supabase/.temp/

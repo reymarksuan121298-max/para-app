@@ -202,6 +202,9 @@ export const adminCreateUserSchema = z.object({
     .email('Please enter a valid email address'),
   phone: z.string().min(10, 'Please enter a valid mobile number'),
   role: z.enum(['passenger', 'driver', 'admin']),
+  // Required so the created account has real Supabase Auth credentials and can
+  // actually sign in (profiles without an auth user can never authenticate).
+  password: z.string().min(6, 'Password must be at least 6 characters'),
   license_number: z.string().optional(),
   vehicle_number: z.string().optional(),
   seat_capacity: z.coerce.number().int().min(5).max(7).optional(),
