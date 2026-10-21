@@ -1,12 +1,12 @@
 import { supabase } from './supabaseClient';
 import { FareSettings, LocationItem, Ride, UserProfile } from '../types';
-import { generateUUID } from '../utils/otp';
 
 export interface CreateUserPayload {
   name: string;
   email: string;
   phone: string;
   role: 'passenger' | 'driver' | 'admin';
+  password: string;
   license_number?: string;
   vehicle_number?: string;
   seat_capacity?: number;
@@ -26,19 +26,65 @@ export async function adminCreateUser(payload: CreateUserPayload): Promise<UserP
     throw new Error('A user with this email address already exists.');
   }
 
-  const userId = generateUUID();
+  // 1. Create the Supabase Auth identity first. public.users.user_id is a
+  // foreign key to auth.users(id), and password sign-in is only possible when
+  // an auth account exists — creating the profile alone produces an account
+  // that can never log in.
+  //
+  // signUp() replaces the active session with the new user, so the signed-in
+  // administrator's session is captured up front and restored afterwards.
+  const {
+    data: { session: adminSession },
+  } = await supabase.auth.getSession();
 
-  // 1. Insert into public.users
+  const { data: authData, error: authError } = await supabase.auth.signUp({
+    email: normalizedEmail,
+    password: payload.password,
+    options: {
+      data: {
+        name: payload.name.trim(),
+        phone: payload.phone.trim(),
+        role: payload.role,
+      },
+    },
+  });
+
+  // Restore the administrator session so creating an account never signs them out.
+  if (adminSession) {
+    await supabase.auth.setSession({
+      access_token: adminSession.access_token,
+      refresh_token: adminSession.refresh_token,
+    });
+  }
+
+  if (authError) {
+    throw new Error(authError.message || 'Failed to create login credentials for this account.');
+  }
+
+  // Supabase returns an obfuscated user (no identities) when the email is
+  // already registered in auth.users.
+  if (!authData?.user || (authData.user.identities && authData.user.identities.length === 0)) {
+    throw new Error('A login account with this email address already exists.');
+  }
+
+  const userId = authData.user.id;
+
+  // 2. Upsert the public profile linked to the newly created auth user. The
+  // auth trigger may have already inserted a row, so this must not be an insert.
   const { data: newUser, error: userError } = await supabase
     .from('users')
-    .insert({
-      user_id: userId,
-      name: payload.name.trim(),
-      email: normalizedEmail,
-      phone: payload.phone.trim(),
-      role: payload.role,
-      status: 'active',
-    })
+    .upsert(
+      {
+        user_id: userId,
+        name: payload.name.trim(),
+        email: normalizedEmail,
+        phone: payload.phone.trim(),
+        role: payload.role,
+        status: 'active',
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' },
+    )
     .select()
     .single();
 
@@ -46,12 +92,12 @@ export async function adminCreateUser(payload: CreateUserPayload): Promise<UserP
     throw new Error(userError?.message || 'Failed to create user account');
   }
 
-  // 2. If passenger, create passenger record
+  // 3. If passenger, create passenger record
   if (payload.role === 'passenger') {
     await supabase.from('passengers').insert({ user_id: userId });
   }
 
-  // 3. If driver, create driver record
+  // 4. If driver, create driver record
   if (payload.role === 'driver') {
     const shortSuffix = userId.substring(0, 4).toUpperCase();
     await supabase.from('drivers').insert({

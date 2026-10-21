@@ -242,6 +242,13 @@ para-app/
 
 ## 🧪 Step-by-Step Multi-Role Testing Guide
 
+> **Default administrator account** (provisioned by
+> `supabase/migrations/20260818000011_fix_admin_auth_and_role_guards.sql`):
+> `admin@para.com` / `Admin@12345`. Admin accounts need a matching Supabase Auth
+> identity to sign in — profiles created in `public.users` alone cannot
+> authenticate. Change this password from the Supabase Dashboard after first
+> sign-in, and give every admin created from **Manage Users** a password.
+
 1. **Passenger Flow**:
    - Register or log in with role **Passenger**.
    - Tap **"Book Ride"** on the home map.

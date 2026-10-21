@@ -60,6 +60,7 @@ export const ManageUsersScreen: React.FC = () => {
       email: '',
       phone: '',
       role: 'passenger',
+      password: '',
       license_number: '',
       vehicle_number: '',
       seat_capacity: 6,
@@ -91,6 +92,7 @@ export const ManageUsersScreen: React.FC = () => {
       email: '',
       phone: '',
       role: 'passenger',
+      password: '',
       license_number: '',
       vehicle_number: '',
       seat_capacity: 6,
@@ -109,6 +111,7 @@ export const ManageUsersScreen: React.FC = () => {
         email: values.email.trim(),
         phone: values.phone.trim(),
         role: values.role,
+        password: values.password,
         license_number: values.license_number?.trim(),
         vehicle_number: values.vehicle_number?.trim(),
         seat_capacity: values.seat_capacity ? Number(values.seat_capacity) : 6,
@@ -117,7 +120,7 @@ export const ManageUsersScreen: React.FC = () => {
       setShowAddModal(false);
       Alert.alert(
         'User Created',
-        `Account for ${values.name} (${values.role.toUpperCase()}) was successfully created.`
+        `Account for ${values.name} (${values.role.toUpperCase()}) was successfully created. They can now sign in with the email and password you set.`
       );
       await fetchUsers();
     } catch (err) {
@@ -403,6 +406,15 @@ export const ManageUsersScreen: React.FC = () => {
                 label="Phone Number"
                 placeholder="e.g. 09123456789"
                 keyboardType="phone-pad"
+              />
+
+              <FormInput
+                control={control}
+                name="password"
+                label="Sign-in Password"
+                placeholder="At least 6 characters"
+                secureTextEntry
+                autoCapitalize="none"
               />
 
               {/* Driver-Specific Fields */}

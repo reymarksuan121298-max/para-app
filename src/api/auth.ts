@@ -22,15 +22,55 @@ export interface SignUpDriverData {
   seat_capacity: number;
 }
 
+function isNetworkError(err: unknown): boolean {
+  if (!err) return false;
+  const msg = (
+    typeof err === 'string'
+      ? err
+      : typeof err === 'object' && err !== null && 'message' in err
+      ? String((err as { message: unknown }).message)
+      : ''
+  ).toLowerCase();
+
+  const details = (
+    typeof err === 'object' && err !== null && 'details' in err
+      ? String((err as { details: unknown }).details)
+      : ''
+  ).toLowerCase();
+
+  const status =
+    typeof err === 'object' && err !== null && 'status' in err
+      ? (err as { status: unknown }).status
+      : undefined;
+
+  return (
+    msg.includes('fetch failed') ||
+    msg.includes('network request failed') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('enotfound') ||
+    msg.includes('networkerror') ||
+    details.includes('enotfound') ||
+    status === 0
+  );
+}
+
 export async function checkEmailAvailable(
   email: string
 ): Promise<{ available: boolean; existingRole?: UserRole }> {
   const normalizedEmail = email.trim().toLowerCase();
-  const { data: existingUser } = await supabase
+  const { data: existingUser, error } = await supabase
     .from('users')
     .select('user_id, role')
     .ilike('email', normalizedEmail)
     .maybeSingle();
+
+  if (error) {
+    if (isNetworkError(error)) {
+      throw new Error(
+        'Cannot connect to the server. Please check your internet connection or Supabase backend status.'
+      );
+    }
+  }
 
   if (existingUser) {
     return { available: false, existingRole: existingUser.role as UserRole };
@@ -41,15 +81,60 @@ export async function checkEmailAvailable(
 export async function signInWithEmail(email: string, password?: string): Promise<UserProfile> {
   const normalizedEmail = email.trim().toLowerCase();
 
-  // Query user directly from public.users
-  const { data: user, error } = await supabase
-    .from('users')
-    .select('*')
-    .ilike('email', normalizedEmail)
-    .single();
+  let authUserId: string | null = null;
 
-  if (error || !user) {
+  // 1. If password is provided, authenticate via Supabase Auth
+  if (password) {
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    });
+
+    if (authError) {
+      if (isNetworkError(authError)) {
+        throw new Error(
+          'Cannot connect to the server. Please check your internet connection or verify your Supabase project status.'
+        );
+      }
+
+      const msg = authError.message.toLowerCase();
+      // If error is not generic invalid credentials (e.g. rate limit, unconfirmed email, banned)
+      if (!msg.includes('invalid login credentials')) {
+        throw new Error(authError.message);
+      }
+    } else if (authData?.user) {
+      authUserId = authData.user.id;
+    }
+  }
+
+  // 2. Query user profile from public.users
+  const query = supabase.from('users').select('*');
+  const { data: user, error } = authUserId
+    ? await query.eq('user_id', authUserId).maybeSingle()
+    : await query.ilike('email', normalizedEmail).maybeSingle();
+
+  if (error) {
+    if (isNetworkError(error)) {
+      throw new Error(
+        'Cannot connect to the server. Please check your internet connection or verify your Supabase project status.'
+      );
+    }
+    throw new Error(error.message || 'Database error occurred during login.');
+  }
+
+  if (!user) {
+    if (password && !authUserId) {
+      throw new Error('Invalid email or password. Please verify your credentials or register an account.');
+    }
     throw new Error('User not found. Please check your email or register an account.');
+  }
+
+  // If password was provided but Supabase Auth did not authenticate it, either
+  // the password is wrong or this profile has no auth account at all (e.g. an
+  // admin created before sign-in accounts were provisioned). Both cases must
+  // give the same message — never claim the password itself is incorrect.
+  if (password && !authUserId) {
+    throw new Error('Invalid email or password. Please verify your credentials.');
   }
 
   if (user.status === 'suspended') {
