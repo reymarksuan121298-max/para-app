@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabaseClient';
 import { DriverProfile, PassengerProfile, UserProfile, UserRole } from '../types';
-import { generateUUID } from '../utils/otp';
 
 const SESSION_KEY = '@para_auth_user_id';
 
@@ -146,46 +145,86 @@ export async function signInWithEmail(email: string, password?: string): Promise
   return user;
 }
 
+/**
+ * Creates the Supabase Auth account behind a new profile.
+ *
+ * Registration is verified by the EmailJS OTP, so the account must be usable
+ * immediately — a profile without a matching auth user has no password and can
+ * never sign in again. Failures are surfaced instead of silently creating a
+ * profile with a random UUID.
+ */
+async function createAuthAccount(
+  email: string,
+  password: string | undefined,
+  metadata: { name: string; phone: string; role: 'passenger' | 'driver' },
+): Promise<string> {
+  let userId = '';
+  let failureMessage = '';
+
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password: password || 'para123456',
+      options: { data: metadata },
+    });
+
+    if (error) {
+      failureMessage = error.message;
+    } else if (!data?.user) {
+      failureMessage = 'Sign-up did not return an account.';
+    } else if (data.user.identities && data.user.identities.length === 0) {
+      // Supabase hides duplicate registrations this way instead of erroring.
+      failureMessage = 'An account with this email address already exists.';
+    } else {
+      userId = data.user.id;
+      if (data.session) {
+        await supabase.auth.setSession(data.session);
+      } else {
+        // "Confirm email" may still be enabled in the Supabase project, in which
+        // case sign-up withholds the session. EmailJS already verified the
+        // address and migration 12 auto-confirms auth users, so fetch the
+        // session directly. Failure here is not fatal: the caller still signs in
+        // locally and can log in with the password afterwards.
+        const { data: signInData } = await supabase.auth.signInWithPassword({
+          email,
+          password: password || 'para123456',
+        });
+        if (signInData?.session) {
+          await supabase.auth.setSession(signInData.session);
+        }
+      }
+    }
+  } catch (err) {
+    failureMessage = err instanceof Error ? err.message : 'Sign-up failed.';
+  }
+
+  if (!userId) {
+    const msg = failureMessage.toLowerCase();
+    if (msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
+      throw new Error('An account with this email address already exists. Please sign in instead.');
+    }
+    if (msg.includes('rate limit') || msg.includes('too many')) {
+      throw new Error('Too many registration attempts. Please wait a minute and try again.');
+    }
+    throw new Error(
+      failureMessage || 'Could not create your sign-in credentials. Please try again.'
+    );
+  }
+
+  return userId;
+}
+
 export async function signUpPassenger(payload: SignUpPassengerData): Promise<{ user: UserProfile; passenger: PassengerProfile }> {
   const { name, email, phone, password } = payload;
   const normalizedEmail = email.trim().toLowerCase();
 
-  let userId = '';
-
-  // Attempt Supabase auth account creation with role metadata
-  try {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: normalizedEmail,
-      password: password || 'para123456',
-      options: {
-        data: {
-          name: name.trim(),
-          phone: phone.trim(),
-          role: 'passenger',
-        },
-      },
-    });
-
-    if (!authError && authData?.user) {
-      userId = authData.user.id;
-      if (authData.session) {
-        await supabase.auth.setSession(authData.session);
-      }
-    }
-  } catch {
-    // Ignore rate-limit from Supabase since verification was already completed via EmailJS
-  }
-
-  if (!userId) {
-    // Fallback: check if user already exists in public.users or generate new UUID
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('user_id')
-      .ilike('email', normalizedEmail)
-      .maybeSingle();
-
-    userId = existingUser?.user_id || generateUUID();
-  }
+  // The account must exist in Supabase Auth so it can sign in after the
+  // EmailJS verification step.
+  const userId = await createAuthAccount(normalizedEmail, password, {
+    name: name.trim(),
+    phone: phone.trim(),
+    role: 'passenger',
+  });
 
   // Explicitly upsert user profile into public.users with passenger role
   const { data: upsertedUser, error: userError } = await supabase
@@ -238,42 +277,13 @@ export async function signUpDriver(payload: SignUpDriverData): Promise<{ user: U
   const { name, email, phone, password, license_number, vehicle_number, seat_capacity } = payload;
   const normalizedEmail = email.trim().toLowerCase();
 
-  let userId = '';
-
-  // Attempt Supabase auth account creation with driver metadata
-  try {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: normalizedEmail,
-      password: password || 'para123456',
-      options: {
-        data: {
-          name: name.trim(),
-          phone: phone.trim(),
-          role: 'driver',
-        },
-      },
-    });
-
-    if (!authError && authData?.user) {
-      userId = authData.user.id;
-      if (authData.session) {
-        await supabase.auth.setSession(authData.session);
-      }
-    }
-  } catch {
-    // Ignore rate-limit from Supabase since verification was already completed via EmailJS
-  }
-
-  if (!userId) {
-    // Fallback: check if user already exists in public.users or generate new UUID
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('user_id')
-      .ilike('email', normalizedEmail)
-      .maybeSingle();
-
-    userId = existingUser?.user_id || generateUUID();
-  }
+  // The account must exist in Supabase Auth so it can sign in after the
+  // EmailJS verification step.
+  const userId = await createAuthAccount(normalizedEmail, password, {
+    name: name.trim(),
+    phone: phone.trim(),
+    role: 'driver',
+  });
 
   // Enforce role: 'driver' on public.users, overriding any trigger default or passenger state
   const { data: upsertedUser, error: userError } = await supabase

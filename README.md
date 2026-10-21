@@ -152,17 +152,32 @@ DEFAULT_LATITUDE=6.9604
 DEFAULT_LONGITUDE=125.0886
 ```
 
+> **Release builds:** `.env` is gitignored and is injected at **compile time**
+> by `react-native-config`. Always build `assembleRelease` with `.env` present
+> (the Gradle script fails the build otherwise). A release APK built without it
+> used to fall back to a different Supabase project, so every login failed with
+> "invalid email or password" while the debug build worked.
+
 ### 3. Database Migrations & Edge Functions
 Apply the database migrations in `supabase/migrations/`:
 ```bash
 supabase db push
-# or run migrations 01 through 05 in the Supabase SQL Editor:
+# or run migrations 01 through 12 in the Supabase SQL Editor:
 # 20260818000001_initial_schema.sql
 # 20260818000002_row_level_security.sql
 # 20260818000003_rpc_functions.sql
 # 20260818000004_realtime_setup.sql
 # 20260818000005_seed_data.sql
+# ... through ...
+# 20260818000012_auto_confirm_auth_users.sql
 ```
+
+**Account verification is handled by EmailJS** (the 6-digit OTP), not by
+Supabase. Migration 12 auto-confirms auth users and forces confirmation on every
+new sign-up, so an EmailJS-verified account can log in immediately and never sits
+in *"Waiting for verification"*. Optionally disable
+**Authentication → Providers → Email → "Confirm email"** in the dashboard as well
+— that only prevents Supabase from also sending its own confirmation email.
 
 Deploy Edge Functions (optional if direct RPC client calls are enabled):
 ```bash

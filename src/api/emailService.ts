@@ -18,15 +18,16 @@ const EMAILJS_API_URL = 'https://api.emailjs.com/api/v1.0/email/send';
  * Sends a 6-digit OTP verification email using the EmailJS service.
  */
 export async function sendOtpEmail(params: SendOtpParams): Promise<EmailServiceResult> {
-  const rawServiceId = Config.EMAILJS_SERVICE_ID || process.env.EMAILJS_SERVICE_ID;
-  // If native react-native-config cache still has the stale template ID, recover automatically
+  const rawServiceId = Config.EMAILJS_SERVICE_ID;
+  // If a previous build injected the wrong variable, fall back to the service
+  // id prefix check rather than a hard-coded credential.
   const serviceId = (rawServiceId && !rawServiceId.startsWith('template_'))
     ? rawServiceId
-    : 'service_k60qbms';
+    : '';
 
-  const templateId = Config.EMAILJS_TEMPLATE_ID || process.env.EMAILJS_TEMPLATE_ID || 'template_ebugcpd';
-  const publicKey = Config.EMAILJS_PUBLIC_KEY || process.env.EMAILJS_PUBLIC_KEY || '5tV1k3l8H09I6n1KX';
-  const privateKey = Config.EMAILJS_PRIVATE_KEY || process.env.EMAILJS_PRIVATE_KEY || 'wRdXZPyyJcpghhBZFUvHM';
+  const templateId = Config.EMAILJS_TEMPLATE_ID || '';
+  const publicKey = Config.EMAILJS_PUBLIC_KEY || '';
+  const privateKey = Config.EMAILJS_PRIVATE_KEY || '';
 
   const { toEmail, toName, otpCode, role = 'passenger' } = params;
 

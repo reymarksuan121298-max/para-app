@@ -8,6 +8,18 @@ project.ext.envConfigFiles = [
 ]
 apply from: file("../../node_modules/react-native-config/android/dotenv.gradle")
 
+// Release builds must be compiled with .env present. The file is gitignored, so
+// a clean checkout would otherwise produce an APK whose react-native-config
+// values are empty and which cannot reach the Supabase backend.
+def isReleaseBuild = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
+def envFile = file("../../.env")
+if (isReleaseBuild && !envFile.exists()) {
+    throw new GradleException(
+        "Missing .env for the release build. Create para-app/.env with SUPABASE_URL " +
+        "and SUPABASE_ANON_KEY (see .env.example) before running assembleRelease."
+    )
+}
+
 /**
  * This is the configuration block to customize your React Native Android app.
  */
